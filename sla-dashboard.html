@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TANFINET — Real-Time SLA Compliance Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600&family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg:         #060d1a;
+            --surface:    rgba(17, 28, 50, 0.80);
+            --surface2:   rgba(30, 41, 65, 0.60);
+            --border:     rgba(99, 179, 237, 0.18);
+            --border-hi:  rgba(99, 179, 237, 0.40);
+            --text:       #e2e8f0;
+            --muted:      #7a90b0;
+            --accent:     #38bdf8;
+            --green:      #4ade80;
+            --red:        #f87171;
+            --yellow:     #facc15;
+            --purple:     #c084fc;
+            --orange:     #fb923c;
+            --radius:     8px;
+            --gap:        14px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ─── HEADER ─────────────────────────────────────── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: rgba(6, 13, 26, 0.95);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 16px;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .logo-badge {
+            background: linear-gradient(135deg, #1e3a8a, #38bdf8);
+            padding: 4px 10px; border-radius: 5px;
+            font-weight: 700; font-size: 0.85rem; letter-spacing: 1px;
+            color: #fff;
+        }
+        header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; color: var(--text); }
+        header h1 span { color: var(--accent); }
+
+        .header-right { display: flex; align-items: center; gap: 20px; }
+
+        /* Connection pill */
+        #conn-status {
+            display: flex; align-items: center; gap: 7px;
+            padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+            border: 1px solid; transition: all 0.4s;
+        }
+        #conn-status.online  { background: rgba(74,222,128,0.12); border-color: var(--green);  color: var(--green);  }
+        #conn-status.offline { background: rgba(248,113,113,0.12); border-color: var(--red);   color: var(--red);    }
+        #conn-status.waiting { background: rgba(250,204,21,0.12);  border-color: var(--yellow); color: var(--yellow); }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+        /* Compliance score */
+        #overall-badge {
+            font-size: 0.78rem; font-weight: 700; padding: 4px 14px; border-radius: 20px;
+            border: 1px solid; transition: all 0.4s;
+        }
+        #overall-badge.ok      { background: rgba(74,222,128,0.12); border-color: var(--green);  color: var(--green);  }
+        #overall-badge.warn    { background: rgba(250,204,21,0.12);  border-color: var(--yellow); color: var(--yellow); }
+        #overall-badge.breach  { background: rgba(248,113,113,0.12); border-color: var(--red);   color: var(--red);    }
+
+        #last-update { font-size: 0.72rem; color: var(--muted); font-family: 'Roboto Mono', monospace; }
+
+        /* ─── MAIN LAYOUT ─────────────────────────────────── */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 270px 1fr;
+            grid-template-rows: 1fr;
+            overflow: hidden;
+            gap: 0;
+        }
+
+        /* ─── LEFT SIDEBAR ────────────────────────────────── */
+        aside {
+            background: rgba(9,16,32,0.7);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: var(--gap);
+            gap: var(--gap);
+        }
+        aside::-webkit-scrollbar { width: 4px; }
+        aside::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+        .section-title {
+            font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--muted); margin-bottom: 2px; font-weight: 600;
+        }
+
+        /* SLA Config card */
+        .sla-config-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px;
+        }
+        .sla-config-block p.section-title { margin-bottom: 10px; }
+
+        .sla-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .sla-row:last-child { margin-bottom: 0; }
+        .sla-row label { font-size: 0.75rem; color: var(--muted); }
+        .sla-row label strong { display: block; font-size: 0.8rem; color: var(--text); font-weight: 500; }
+        .sla-input {
+            width: 78px; padding: 4px 6px; font-size: 0.82rem; font-weight: 600;
+            background: rgba(255,255,255,0.06); color: var(--accent);
+            border: 1px solid var(--border-hi); border-radius: 5px;
+            text-align: right; outline: none; font-family: 'Roboto Mono', monospace;
+        }
+        .sla-input:focus { border-color: var(--accent); background: rgba(56,189,248,0.08); }
+
+        /* Dept info */
+        .info-pill {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 12px;
+            font-size: 0.8rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .info-pill span { color: var(--muted); }
+        .info-pill strong { color: var(--accent); font-family: 'Roboto Mono', monospace; }
+
+        /* Violation log */
+        .vlog-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .vlog-header {
+            padding: 8px 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .vlog-header .section-title { margin: 0; }
+        #vlog-count {
+            background: rgba(248,113,113,0.2); color: var(--red);
+            border: 1px solid rgba(248,113,113,0.4);
+            font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+            border-radius: 20px; font-family: 'Roboto Mono', monospace;
+        }
+        #btn-clear-log {
+            font-size: 0.68rem; padding: 2px 8px; border-radius: 4px;
+            background: transparent; border: 1px solid var(--border);
+            color: var(--muted); cursor: pointer; transition: all 0.2s;
+        }
+        #btn-clear-log:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.07); }
+        #violation-log {
+            flex: 1; overflow-y: auto; padding: 6px 8px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        #violation-log::-webkit-scrollbar { width: 4px; }
+        #violation-log::-webkit-scrollbar-thumb { background: rgba(248,113,113,0.3); border-radius: 2px; }
+        .vlog-empty { color: var(--muted); font-size: 0.75rem; text-align: center; margin-top: 24px; }
+        .vlog-entry {
+            background: rgba(248,113,113,0.07);
+            border-left: 2px solid var(--red);
+            border-radius: 0 4px 4px 0;
+            padding: 5px 8px;
+            font-size: 0.72rem;
+            animation: logIn 0.3s ease;
+        }
+        .vlog-entry.warn {
+            background: rgba(250,204,21,0.07);
+            border-left-color: var(--yellow);
+        }
+        .vlog-entry .vtime { color: var(--muted); font-family: 'Roboto Mono', monospace; font-size: 0.68rem; }
+        .vlog-entry .vtitle { color: var(--red); font-weight: 600; }
+        .vlog-entry.warn .vtitle { color: var(--yellow); }
+        .vlog-entry .vdesc { color: var(--text); margin-top: 1px; }
+        @keyframes logIn { from { opacity:0; transform: translateX(-6px); } to { opacity:1; transform: none; } }
+
+        /* ─── RIGHT CONTENT ───────────────────────────────── */
+        .content {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: var(--gap);
+            gap: var(--gap);
+        }
+
+        /* Metric cards row */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: var(--gap);
+            flex-shrink: 0;
+        }
+
+        .mcard {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.4s, box-shadow 0.4s;
+        }
+        .mcard::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: var(--card-accent, var(--accent));
+            transition: background 0.4s;
+        }
+        .mcard.ok     { --card-accent: var(--green);  border-color: rgba(74,222,128,0.25);  box-shadow: 0 0 16px rgba(74,222,128,0.06); }
+        .mcard.warn   { --card-accent: var(--yellow); border-color: rgba(250,204,21,0.25);  box-shadow: 0 0 16px rgba(250,204,21,0.06); }
+        .mcard.breach { --card-accent: var(--red);    border-color: rgba(248,113,113,0.35); box-shadow: 0 0 16px rgba(248,113,113,0.10); }
+
+        .mcard-title { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+        .mcard-value { font-size: 1.6rem; font-weight: 700; font-family: 'Roboto Mono', monospace; line-height: 1.1; color: var(--text); transition: color 0.4s; }
+        .mcard.ok     .mcard-value { color: var(--green); }
+        .mcard.warn   .mcard-value { color: var(--yellow); }
+        .mcard.breach .mcard-value { color: var(--red); }
+        .mcard-sla    { font-size: 0.7rem; color: var(--muted); }
+        .mcard-sla span { color: var(--muted); font-family: 'Roboto Mono', monospace; }
+        .mcard-status { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px; margin-top: 2px; }
+        .mcard.ok     .mcard-status { color: var(--green); }
+        .mcard.warn   .mcard-status { color: var(--yellow); }
+        .mcard.breach .mcard-status { color: var(--red); }
+
+        /* Charts row */
+        .charts-row {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--gap);
+            min-height: 0;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+        }
+        .chart-card-header {
+            flex-shrink: 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .chart-card-header .section-title { margin: 0; }
+        .threshold-line-label {
+            font-size: 0.68rem; color: var(--red); font-family: 'Roboto Mono', monospace;
+        }
+        .chart-wrap { flex: 1; position: relative; min-height: 0; }
+
+        /* Downtime banner */
+        #downtime-notice {
+            display: none;
+            background: rgba(185,28,28,0.5);
+            border: 1px solid rgba(248,113,113,0.6);
+            border-radius: var(--radius);
+            padding: 6px 14px;
+            font-size: 0.78rem; font-weight: 700; text-align: center; color: var(--red);
+            letter-spacing: 0.8px; flex-shrink: 0;
+            animation: blink-bg 1.2s infinite alternate;
+        }
+        @keyframes blink-bg {
+            from { background: rgba(185,28,28,0.4); }
+            to   { background: rgba(127,29,29,0.6); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HEADER ═════════════════════════════════ -->
+<header>
+    <div class="header-left">
+        <div class="logo-badge">TANFINET</div>
+        <h1>Real-Time <span>SLA Compliance</span> Monitor</h1>
+    </div>
+    <div class="header-right">
+        <span id="last-update">Waiting for data…</span>
+        <div id="conn-status" class="waiting">
+            <span class="dot"></span>
+            <span id="conn-label">WAITING FOR SIM</span>
+        </div>
+        <div id="overall-badge" class="warn">— COMPLIANCE</div>
+    </div>
+</header>
+
+<main>
+    <!-- ═══════════════════════ LEFT SIDEBAR ══════════════════════════════ -->
+    <aside>
+
+        <!-- SLA Thresholds -->
+        <div class="sla-config-block">
+            <p class="section-title">SLA Thresholds (Editable)</p>
+
+            <div class="sla-row">
+                <label>
+                    <strong>Max Packet Loss</strong>
+                    Packets may not exceed this drop rate
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <input id="sla-loss"    class="sla-input" type="number" min="0" max="50"   step="0.5" value="1"> %
+                </div>
+            </div>
+            <div class="sla-row">
+                <label>
+                    <strong>Max Avg RTT</strong>
+                    Round-trip time upper bound
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <input id="sla-rtt"     class="sla-input" type="number" min="1" max="2000" step="5"   value="150"> ms
+                </div>
+            </div>
+            <div class="sla-row">
+                <label>
+                    <strong>Max Avg Jitter</strong>
+                    Inter-packet delay variation
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <input id="sla-jitter"  class="sla-input" type="number" min="0" max="500"  step="1"   value="20"> ms
+                </div>
+            </div>
+            <div class="sla-row">
+                <label>
+                    <strong>Min Success Rate</strong>
+                    Successful delivery percentage
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <input id="sla-success" class="sla-input" type="number" min="0" max="100"  step="0.5" value="99"> %
+                </div>
+            </div>
+            <div class="sla-row">
+                <label>
+                    <strong>Min Bandwidth</strong>
+                    Committed Information Rate (CIR)
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <input id="sla-bw"      class="sla-input" type="number" min="1" max="1000" step="1"   value="10"> Mbps
+                </div>
+            </div>
+        </div>
+
+        <!-- Sim Info pills -->
+        <div class="info-pill"><span>Active ILL Departments</span><strong id="info-depts">—</strong></div>
+        <div class="info-pill"><span>Packets Sent (total)</span><strong id="info-sent">—</strong></div>
+        <div class="info-pill"><span>Data Transferred</span><strong id="info-data">— KB</strong></div>
+        <div class="info-pill"><span>Simulated Bandwidth</span><strong id="info-bw">— Mbps</strong></div>
+        <div class="info-pill"><span>Traffic Load</span><strong id="info-load">— %</strong></div>
+        <div class="info-pill"><span>Violations (session)</span><strong id="info-viol" style="color:var(--red)">0</strong></div>
+
+        <!-- Violation Log -->
+        <div class="vlog-wrapper">
+            <div class="vlog-header">
+                <p class="section-title" style="margin:0;">Violation Log</p>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span id="vlog-count">0</span>
+                    <button id="btn-clear-log">Clear</button>
+                </div>
+            </div>
+            <div id="violation-log">
+                <p class="vlog-empty" id="vlog-empty">No violations recorded.</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ═══════════════════════ RIGHT CONTENT ═════════════════════════════ -->
+    <div class="content">
+
+        <div id="downtime-notice">⚠ NETWORK DOWNTIME ACTIVE — SLA WINDOW SUSPENDED — ALL PACKETS DROPPED</div>
+
+        <!-- Metric cards -->
+        <div class="metric-grid">
+            <!-- Packet Loss -->
+            <div class="mcard" id="card-loss">
+                <div class="mcard-title">Packet Loss Rate</div>
+                <div class="mcard-value" id="val-loss">—</div>
+                <div class="mcard-sla">SLA max: <span id="lbl-sla-loss">1.00</span>%</div>
+                <div class="mcard-status" id="status-loss">AWAITING DATA</div>
+            </div>
+            <!-- RTT -->
+            <div class="mcard" id="card-rtt">
+                <div class="mcard-title">Avg Round-Trip Time</div>
+                <div class="mcard-value" id="val-rtt">—</div>
+                <div class="mcard-sla">SLA max: <span id="lbl-sla-rtt">150</span> ms</div>
+                <div class="mcard-status" id="status-rtt">AWAITING DATA</div>
+            </div>
+            <!-- Jitter -->
+            <div class="mcard" id="card-jitter">
+                <div class="mcard-title">Avg Jitter</div>
+                <div class="mcard-value" id="val-jitter">—</div>
+                <div class="mcard-sla">SLA max: <span id="lbl-sla-jitter">20</span> ms</div>
+                <div class="mcard-status" id="status-jitter">AWAITING DATA</div>
+            </div>
+            <!-- Success Rate -->
+            <div class="mcard" id="card-success">
+                <div class="mcard-title">Success Rate</div>
+                <div class="mcard-value" id="val-success">—</div>
+                <div class="mcard-sla">SLA min: <span id="lbl-sla-success">99.00</span>%</div>
+                <div class="mcard-status" id="status-success">AWAITING DATA</div>
+            </div>
+            <!-- Bandwidth -->
+            <div class="mcard" id="card-bw">
+                <div class="mcard-title">Bandwidth (CIR)</div>
+                <div class="mcard-value" id="val-bw">—</div>
+                <div class="mcard-sla">SLA min: <span id="lbl-sla-bw">10</span> Mbps</div>
+                <div class="mcard-status" id="status-bw">AWAITING DATA</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-row">
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <p class="section-title">RTT (ms) — Live</p>
+                    <span class="threshold-line-label" id="rtt-threshold-lbl">SLA ≤ 150ms</span>
+                </div>
+                <div class="chart-wrap"><canvas id="chart-rtt"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <p class="section-title">Packet Loss (%) — Live</p>
+                    <span class="threshold-line-label" id="loss-threshold-lbl">SLA ≤ 1.00%</span>
+                </div>
+                <div class="chart-wrap"><canvas id="chart-loss"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <p class="section-title">Jitter (ms) — Live</p>
+                    <span class="threshold-line-label" id="jitter-threshold-lbl">SLA ≤ 20ms</span>
+                </div>
+                <div class="chart-wrap"><canvas id="chart-jitter"></canvas></div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+// ─── SLA State ────────────────────────────────────────────────────────────
+const slaInputs = {
+    loss:    document.getElementById('sla-loss'),
+    rtt:     document.getElementById('sla-rtt'),
+    jitter:  document.getElementById('sla-jitter'),
+    success: document.getElementById('sla-success'),
+    bw:      document.getElementById('sla-bw'),
+};
+
+function getSLA() {
+    return {
+        maxLoss:    parseFloat(slaInputs.loss.value)    || 1,
+        maxRTT:     parseFloat(slaInputs.rtt.value)     || 150,
+        maxJitter:  parseFloat(slaInputs.jitter.value)  || 20,
+        minSuccess: parseFloat(slaInputs.success.value) || 99,
+        minBW:      parseFloat(slaInputs.bw.value)      || 10,
+    };
+}
+
+// Update SLA labels whenever thresholds change
+function refreshSLALabels() {
+    const sla = getSLA();
+    document.getElementById('lbl-sla-loss').textContent    = sla.maxLoss.toFixed(2);
+    document.getElementById('lbl-sla-rtt').textContent     = sla.maxRTT;
+    document.getElementById('lbl-sla-jitter').textContent  = sla.maxJitter;
+    document.getElementById('lbl-sla-success').textContent = sla.minSuccess.toFixed(2);
+    document.getElementById('lbl-sla-bw').textContent      = sla.minBW;
+    document.getElementById('rtt-threshold-lbl').textContent   = `SLA ≤ ${sla.maxRTT}ms`;
+    document.getElementById('loss-threshold-lbl').textContent  = `SLA ≤ ${sla.maxLoss.toFixed(2)}%`;
+    document.getElementById('jitter-threshold-lbl').textContent= `SLA ≤ ${sla.maxJitter}ms`;
+
+    // Update chart annotation lines
+    updateChartThresholds(sla);
+}
+
+Object.values(slaInputs).forEach(inp => inp.addEventListener('input', refreshSLALabels));
+
+// ─── Session Counters ────────────────────────────────────────────────────
+let violationCount = 0;
+let lastTimestamp  = null;
+const HISTORY_MAX  = 60; // data points shown on chart
+
+// ─── Violation Log ───────────────────────────────────────────────────────
+const vlogEl    = document.getElementById('violation-log');
+const vlogEmpty = document.getElementById('vlog-empty');
+const vlogCount = document.getElementById('vlog-count');
+
+function addViolation(title, desc, level = 'breach') {
+    violationCount++;
+    vlogEmpty.style.display = 'none';
+    const entry = document.createElement('div');
+    entry.className = `vlog-entry${level === 'warn' ? ' warn' : ''}`;
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
+    entry.innerHTML = `
+        <div class="vtime">${timeStr}</div>
+        <div class="vtitle">⚠ ${title}</div>
+        <div class="vdesc">${desc}</div>
+    `;
+    vlogEl.insertBefore(entry, vlogEl.firstChild);
+    vlogCount.textContent = violationCount;
+    document.getElementById('info-viol').textContent = violationCount;
+}
+
+document.getElementById('btn-clear-log').addEventListener('click', () => {
+    vlogEl.innerHTML = '';
+    vlogEl.appendChild(vlogEmpty);
+    vlogEmpty.style.display = 'block';
+    violationCount = 0;
+    vlogCount.textContent = 0;
+    document.getElementById('info-viol').textContent = 0;
+});
+
+// ─── Metric Card Updater ─────────────────────────────────────────────────
+function setCard(cardId, valId, statusId, rawValue, displayValue, state, statusText) {
+    const card   = document.getElementById(cardId);
+    const valEl  = document.getElementById(valId);
+    const statEl = document.getElementById(statusId);
+    card.className   = `mcard ${state}`;
+    valEl.textContent  = displayValue;
+    statEl.textContent = statusText;
+}
+
+// Track previous states to detect transitions (no duplicate logs)
+const prevState = { loss: null, rtt: null, jitter: null, success: null, bw: null };
+
+function evaluate(data) {
+    const sla = getSLA();
+    const results = {};
+
+    // Packet Loss
+    const lossOk = data.lossRate <= sla.maxLoss;
+    const lossState = data.lossRate > sla.maxLoss * 2 ? 'breach' : lossOk ? 'ok' : 'warn';
+    setCard('card-loss', 'val-loss', 'status-loss',
+        data.lossRate, `${data.lossRate.toFixed(2)}%`,
+        lossState,
+        lossOk ? '✔ WITHIN SLA' : `✘ EXCEEDS SLA (max ${sla.maxLoss}%)`);
+    if (!lossOk && prevState.loss !== 'breach' && prevState.loss !== 'warn') {
+        addViolation('Packet Loss Breach', `Loss rate ${data.lossRate.toFixed(2)}% exceeds SLA limit of ${sla.maxLoss}%`);
+    }
+    prevState.loss = lossState;
+
+    // RTT
+    const rttOk = data.avgRTT <= sla.maxRTT;
+    const rttState = data.avgRTT > sla.maxRTT * 1.5 ? 'breach' : rttOk ? 'ok' : 'warn';
+    setCard('card-rtt', 'val-rtt', 'status-rtt',
+        data.avgRTT, `${data.avgRTT}ms`,
+        rttState,
+        rttOk ? '✔ WITHIN SLA' : `✘ EXCEEDS SLA (max ${sla.maxRTT}ms)`);
+    if (!rttOk && prevState.rtt !== 'breach' && prevState.rtt !== 'warn') {
+        addViolation('RTT Breach', `Avg RTT ${data.avgRTT}ms exceeds SLA limit of ${sla.maxRTT}ms`);
+    }
+    prevState.rtt = rttState;
+
+    // Jitter
+    const jitterOk = data.avgJitter <= sla.maxJitter;
+    const jitterState = data.avgJitter > sla.maxJitter * 1.5 ? 'breach' : jitterOk ? 'ok' : 'warn';
+    setCard('card-jitter', 'val-jitter', 'status-jitter',
+        data.avgJitter, `${data.avgJitter}ms`,
+        jitterState,
+        jitterOk ? '✔ WITHIN SLA' : `✘ EXCEEDS SLA (max ${sla.maxJitter}ms)`);
+    if (!jitterOk && prevState.jitter !== 'breach' && prevState.jitter !== 'warn') {
+        addViolation('Jitter Breach', `Avg jitter ${data.avgJitter}ms exceeds SLA limit of ${sla.maxJitter}ms`);
+    }
+    prevState.jitter = jitterState;
+
+    // Success Rate
+    const successOk = data.successRate >= sla.minSuccess;
+    const successState = data.successRate < sla.minSuccess * 0.95 ? 'breach' : successOk ? 'ok' : 'warn';
+    setCard('card-success', 'val-success', 'status-success',
+        data.successRate, `${parseFloat(data.successRate).toFixed(2)}%`,
+        successState,
+        successOk ? '✔ WITHIN SLA' : `✘ BELOW SLA (min ${sla.minSuccess}%)`);
+    if (!successOk && prevState.success !== 'breach' && prevState.success !== 'warn') {
+        addViolation('Success Rate Breach', `Delivery success ${data.successRate.toFixed(2)}% is below SLA minimum of ${sla.minSuccess}%`);
+    }
+    prevState.success = successState;
+
+    // Bandwidth
+    const bwOk = data.bandwidth >= sla.minBW;
+    const bwState = data.bandwidth < sla.minBW * 0.7 ? 'breach' : bwOk ? 'ok' : 'warn';
+    setCard('card-bw', 'val-bw', 'status-bw',
+        data.bandwidth, `${data.bandwidth} Mbps`,
+        bwState,
+        bwOk ? '✔ WITHIN SLA' : `✘ BELOW CIR (min ${sla.minBW} Mbps)`);
+    if (!bwOk && prevState.bw !== 'breach' && prevState.bw !== 'warn') {
+        addViolation('Bandwidth Below CIR', `Bandwidth ${data.bandwidth} Mbps is below committed rate of ${sla.minBW} Mbps`, 'warn');
+    }
+    prevState.bw = bwState;
+
+    // Downtime banner
+    document.getElementById('downtime-notice').style.display = data.downtimeActive ? 'block' : 'none';
+    if (data.downtimeActive && prevState._downtime !== true) {
+        addViolation('NETWORK DOWNTIME ACTIVE', 'All packets being dropped. SLA window impacted.');
+    }
+    prevState._downtime = data.downtimeActive;
+
+    // Overall compliance score
+    const passing = [lossOk, rttOk, jitterOk, successOk, bwOk].filter(Boolean).length;
+    const pct = Math.round((passing / 5) * 100);
+    const badge = document.getElementById('overall-badge');
+    badge.textContent = `${pct}% COMPLIANCE`;
+    badge.className   = pct === 100 ? 'ok' : pct >= 60 ? 'warn' : 'breach';
+
+    // Info pills
+    document.getElementById('info-depts').textContent = data.departments;
+    document.getElementById('info-sent').textContent  = data.sent;
+    document.getElementById('info-data').textContent  = `${data.dataKB} KB`;
+    document.getElementById('info-bw').textContent    = `${data.bandwidth} Mbps`;
+    document.getElementById('info-load').textContent  = `${data.load}%`;
+}
+
+// ─── Chart Setup ─────────────────────────────────────────────────────────
+Chart.defaults.color = '#7a90b0';
+Chart.defaults.font.family = "'Roboto', sans-serif";
+
+const chartDefaults = {
+    type: 'line',
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: 'rgba(6,13,26,0.92)',
+                borderColor: 'rgba(99,179,237,0.3)',
+                borderWidth: 1,
+                titleFont: { family: "'Roboto Mono', monospace", size: 11 },
+                bodyFont:  { family: "'Roboto Mono', monospace", size: 11 },
+            }
+        },
+        scales: {
+            x: {
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                ticks: { maxTicksLimit: 6, font: { size: 10, family: "'Roboto Mono', monospace" } }
+            },
+            y: {
+                grid: { color: 'rgba(255,255,255,0.06)' },
+                ticks: { font: { size: 10, family: "'Roboto Mono', monospace" } },
+                beginAtZero: true,
+            }
+        }
+    }
+};
+
+function makeChart(canvasId, label, color) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label,
+                    data: [],
+                    borderColor: color,
+                    backgroundColor: color.replace(')', ', 0.12)').replace('rgb', 'rgba'),
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    fill: true,
+                    tension: 0.4,
+                    order: 1,
+                },
+                {
+                    label: 'SLA Threshold',
+                    data: [],
+                    borderColor: 'rgba(248,113,113,0.7)',
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    order: 0,
+                }
+            ]
+        },
+        options: JSON.parse(JSON.stringify(chartDefaults.options))
+    });
+}
+
+const rttChart    = makeChart('chart-rtt',    'Avg RTT (ms)',      'rgb(250,204,21)');
+const lossChart   = makeChart('chart-loss',   'Packet Loss (%)',   'rgb(248,113,113)');
+const jitterChart = makeChart('chart-jitter', 'Avg Jitter (ms)',   'rgb(192,132,252)');
+
+function pushChartData(chart, label, value, threshold) {
+    chart.data.labels.push(label);
+    chart.data.datasets[0].data.push(value);
+    chart.data.datasets[1].data.push(threshold);
+    if (chart.data.labels.length > HISTORY_MAX) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
+    }
+    chart.update('none');
+}
+
+function updateChartThresholds(sla) {
+    // Re-draw threshold lines for all existing points
+    const len = rttChart.data.datasets[1].data.length;
+    rttChart.data.datasets[1].data    = Array(len).fill(sla.maxRTT);
+    lossChart.data.datasets[1].data   = Array(len).fill(sla.maxLoss);
+    jitterChart.data.datasets[1].data = Array(len).fill(sla.maxJitter);
+    rttChart.update('none');
+    lossChart.update('none');
+    jitterChart.update('none');
+}
+
+// ─── BroadcastChannel Listener ───────────────────────────────────────────
+const channel = new BroadcastChannel('tanfinet-sla-metrics');
+const connStatus  = document.getElementById('conn-status');
+const connLabel   = document.getElementById('conn-label');
+const lastUpdate  = document.getElementById('last-update');
+
+let offlineTimer = null;
+
+function setOffline() {
+    connStatus.className = 'offline';
+    connLabel.textContent = 'SIM DISCONNECTED';
+}
+
+channel.addEventListener('message', (e) => {
+    const data = e.data;
+
+    // Connection indicator
+    connStatus.className = 'online';
+    connLabel.textContent = 'SIM LIVE';
+    clearTimeout(offlineTimer);
+    offlineTimer = setTimeout(setOffline, 3500);
+
+    // Last update time
+    const now = new Date(data.timestamp);
+    lastUpdate.textContent = `Last update: ${now.toTimeString().split(' ')[0]}`;
+
+    // Evaluate SLA compliance
+    evaluate(data);
+
+    // Push to charts
+    const sla  = getSLA();
+    const tick = now.toTimeString().substring(3, 8); // MM:SS
+    pushChartData(rttChart,    tick, data.avgRTT,    sla.maxRTT);
+    pushChartData(lossChart,   tick, data.lossRate,  sla.maxLoss);
+    pushChartData(jitterChart, tick, data.avgJitter, sla.maxJitter);
+});
+
+// Init labels
+refreshSLALabels();
+</script>
+</body>
+</html>
