@@ -692,7 +692,7 @@ def build_report(
     # ── Resolve logo paths ───────────────────────────────────────────────
     _logo_dir = os.path.dirname(os.path.abspath(__file__))
     _logo1_path = logo1_path or os.path.join(_logo_dir, "logo1.png")
-    _logo2_path = logo2_path or os.path.join(_logo_dir, "logo2.png")
+    _logo2_path = logo2_path or os.path.join(_logo_dir, "logo3.png")
 
     # ── Output target ────────────────────────────────────────────────────
     if output is None:
@@ -731,7 +731,7 @@ def build_report(
     story.append(Spacer(1, 72 * mm))
     story.append(Paragraph("ILL Bandwidth SLA<br/>Compliance Report", ST["cover_title"]))
     story.append(Spacer(1, 5 * mm))
-    story.append(Paragraph("Internet Leased Line Performance Audit", ST["cover_sub"]))
+    story.append(Paragraph("Service Level Agreement Audit", ST["cover_sub"]))
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(f"Reporting Period: {REPORT_PERIOD}", ST["cover_meta"]))
     story.append(Spacer(1, 2 * mm))
@@ -807,7 +807,7 @@ def build_report(
 
     # KPI Cards row
     kpi_data = [
-        ("Total Circuits",     str(TOTAL_CIRCUITS),  "ILL connections monitored",  TANFINET_DARK),
+        ("Total ILLs",     str(TOTAL_CIRCUITS),  "ILL connections monitored",  TANFINET_DARK),
         ("Compliant",          str(COMPLIANT),        "Met SLA uptime target",       GREEN_OK),
         ("Breach",             str(BREACH),           "Below SLA threshold",         RED_FAIL if BREACH else GREY_LINE),
         ("Avg Uptime",         f"{OVERALL_UPTIME}%",  "Network-wide average",        TANFINET_ACCENT),
