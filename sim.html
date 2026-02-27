@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D SLA Network Simulator</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.85);
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            --border-color: #334155;
+            --metric-bg: rgba(15, 23, 42, 0.6);
+            --btn-bg: #2563eb;
+            --btn-hover: #1d4ed8;
+            --label-bg: rgba(0,0,0,0.7);
+            --label-border: #475569;
+        }
+
+        body.theme-light {
+            --bg-color: #f1f5f9;
+            --panel-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --border-color: #cbd5e1;
+            --metric-bg: rgba(241, 245, 249, 0.8);
+            --btn-bg: #3b82f6;
+            --btn-hover: #2563eb;
+            --label-bg: rgba(255,255,255,0.9);
+            --label-border: #94a3b8;
+        }
+        
+        body.theme-cyber {
+            --bg-color: #050505;
+            --panel-bg: rgba(10, 10, 15, 0.85);
+            --text-main: #00ffcc;
+            --text-muted: #00ccaa;
+            --border-color: #00ffcc;
+            --metric-bg: rgba(0, 20, 20, 0.6);
+            --btn-bg: #ff0055;
+            --btn-hover: #cc0044;
+            --label-bg: rgba(0,20,20,0.8);
+            --label-border: #00ffcc;
+        }
+
+        body { margin: 0; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', sans-serif; transition: background-color 0.5s; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        #dashboard {
+            position: absolute; top: 20px; left: 20px; width: 320px;
+            background: var(--panel-bg); backdrop-filter: blur(10px);
+            padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);
+            z-index: 10; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.5s;
+        }
+        
+        #theme-panel {
+            position: absolute; top: 20px; right: 20px; z-index: 10;
+            background: var(--panel-bg); backdrop-filter: blur(10px);
+            padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border-color);
+        }
+        
+        #theme-panel select { background: transparent; color: var(--text-main); border: none; font-size: 1rem; outline: none; cursor: pointer; }
+        #theme-panel select option { color: #0f172a; }
+
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .control-group { margin-bottom: 15px; }
+        .control-group label { display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        .value-display { float: right; font-weight: bold; color: #38bdf8; }
+        
+        button {
+            width: 100%; padding: 10px; background: var(--btn-bg); color: white; border: none;
+            border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer;
+            transition: background 0.2s; margin-top: 10px;
+        }
+        button:hover { background: var(--btn-hover); }
+        button.secondary { background: transparent; border: 1px solid var(--btn-bg); color: var(--text-main); margin-top: 5px; }
+        button.secondary:hover { background: rgba(59, 130, 246, 0.2); }
+        
+        .metrics { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .metric-card { background: var(--metric-bg); padding: 10px; border-radius: 6px; text-align: center; border: 1px solid transparent; }
+        body.theme-cyber .metric-card { border-color: #003333; }
+        .metric-value { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
+        .text-green { color: #4ade80; } .text-red { color: #f87171; } .text-blue { color: #60a5fa; } .text-yellow { color: #facc15; }
+        
+        .node-label {
+            position: absolute; color: var(--text-main); font-size: 12px; font-weight: bold;
+            background: var(--label-bg); padding: 5px 10px; border-radius: 6px;
+            pointer-events: none; z-index: 5; transform: translate(-50%, -50%);
+            border: 1px solid var(--label-border); white-space: nowrap; transition: background 0.5s, color 0.5s;
+        }
+        
+        .agent-label {
+            display: none; background: rgba(147, 51, 234, 0.85); color: white;
+            border: 1px solid #d8b4fe; font-size: 14px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+        
+        .ill-label { color: #38bdf8; font-size: 11px; background: rgba(15, 23, 42, 0.8); border: 1px solid #3b82f6; font-style: italic;}
+    </style>
+</head>
+<body>
+
+    <div id="theme-panel">
+        <select id="theme-select">
+            <option value="dark">🌙 Dark Theme</option>
+            <option value="light">☀️ Light Theme</option>
+            <option value="cyber">🤖 Cyberpunk</option>
+        </select>
+    </div>
+
+    <div id="dashboard">
+        <h2>SLA Simulator Console</h2>
+        <div class="control-group">
+            <label>ILL Link Latency (ms) <span id="latency-val" class="value-display">100ms</span></label>
+            <input type="range" id="latency-slider" min="10" max="1000" value="100">
+        </div>
+        <div class="control-group">
+            <label>ILL Packet Loss Prob. (%) <span id="loss-val" class="value-display">5%</span></label>
+            <input type="range" id="loss-slider" min="0" max="50" value="5">
+        </div>
+        <button id="btn-send">Trigger SLA Ping (All)</button>
+        <button id="btn-add-dept" class="secondary">+ Add Department Node</button>
+        <div class="metrics">
+            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Sent</div><div id="m-sent" class="metric-value text-blue">0</div></div>
+            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Success</div><div id="m-success" class="metric-value text-green">0</div></div>
+            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Lost</div><div id="m-lost" class="metric-value text-red">0</div></div>
+            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Avg RTT</div><div id="m-rtt" class="metric-value text-yellow">0ms</div></div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+    <div id="ui-layer"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- 1. Scene Setup & Theming ---
+        const container = document.getElementById('canvas-container');
+        const uiLayer = document.getElementById('ui-layer');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 15, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 + 0.1;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        let grid = new THREE.GridHelper(60, 60, 0x1e293b, 0x1e293b);
+        grid.position.y = -0.1;
+        scene.add(grid);
+
+        document.getElementById('theme-select').addEventListener('change', (e) => {
+            const theme = e.target.value;
+            document.body.className = `theme-${theme}`;
+            if(theme === 'dark') { scene.fog.color.setHex(0x0f172a); grid.material.color.setHex(0x1e293b); } 
+            else if(theme === 'light') { scene.fog.color.setHex(0xf1f5f9); grid.material.color.setHex(0xcbd5e1); } 
+            else if(theme === 'cyber') { scene.fog.color.setHex(0x050505); grid.material.color.setHex(0x003333); }
+        });
+
+        // --- 2. Dynamic Architecture Generators ---
+        const uiLabels = [];
+        const departments = [];
+        const illTextures = [];
+        const ispPos = new THREE.Vector3(2, 1.5, 0);
+        const mainPos = new THREE.Vector3(9, 2, 0);
+
+        function createHTMLLabel(text, className, offset, mesh) {
+            const el = document.createElement('div');
+            el.className = `node-label ${className}`;
+            el.innerText = text;
+            uiLayer.appendChild(el);
+            uiLabels.push({ el, mesh, offset, isAgent: className.includes('agent-label') });
+            return el;
+        }
+
+        const ispGeo = new THREE.CylinderGeometry(1.2, 1.2, 3, 32);
+        const ispMat = new THREE.MeshPhongMaterial({ color: 0x64748b });
+        const ispServer = new THREE.Mesh(ispGeo, ispMat);
+        ispServer.position.copy(ispPos);
+        scene.add(ispServer);
+        createHTMLLabel('ISP Server', '', 2.5, ispServer);
+
+        const mainGeo = new THREE.BoxGeometry(2, 4, 2);
+        const mainMat = new THREE.MeshPhongMaterial({ color: 0x0f766e });
+        const mainServer = new THREE.Mesh(mainGeo, mainMat);
+        mainServer.position.copy(mainPos);
+        scene.add(mainServer);
+        createHTMLLabel('Main Server', '', 3, mainServer);
+
+        const wanGeo = new THREE.BufferGeometry().setFromPoints([ispPos, mainPos]);
+        scene.add(new THREE.Line(wanGeo, new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 })));
+
+        function createILLTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 256, 0);
+            grad.addColorStop(0, "rgba(56, 189, 248, 0.1)");
+            grad.addColorStop(0.5, "rgba(56, 189, 248, 1.0)");
+            grad.addColorStop(1, "rgba(56, 189, 248, 0.1)");
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 64);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(6, 1);
+            illTextures.push(tex);
+            return tex;
+        }
+
+        function addDepartmentNode() {
+            const index = departments.length;
+            const zOffset = index === 0 ? 0 : (index % 2 !== 0 ? Math.ceil(index/2) * -7 : Math.ceil(index/2) * 7);
+            const deptPos = new THREE.Vector3(-6, 1.5, zOffset);
+
+            const deptGeo = new THREE.BoxGeometry(2, 3, 2);
+            const deptMat = new THREE.MeshPhongMaterial({ color: 0x2563eb, transparent: true, opacity: 1.0 });
+            const deptServer = new THREE.Mesh(deptGeo, deptMat);
+            deptServer.position.copy(deptPos);
+            scene.add(deptServer);
+
+            const agentGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const agentMat = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
+            const virtualAgent = new THREE.Mesh(agentGeo, agentMat);
+            deptServer.add(virtualAgent);
+
+            const pcGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const pcMat = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
+            const pcPositions = [ [-10, 0.4, zOffset+2], [-11, 0.4, zOffset-1], [-9, 0.4, zOffset-2] ];
+            pcPositions.forEach(pos => {
+                const pc = new THREE.Mesh(pcGeo, pcMat);
+                pc.position.set(pos[0], pos[1], pos[2]);
+                scene.add(pc);
+                const lanGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(pos[0], pos[1], pos[2]), new THREE.Vector3(deptPos.x, 0.5, deptPos.z)]);
+                scene.add(new THREE.Line(lanGeo, new THREE.LineBasicMaterial({ color: 0x334155 })));
+            });
+
+            const distance = deptPos.distanceTo(ispPos);
+            const straightPath = new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, distance));
+
+            const illTubeGeo = new THREE.TubeGeometry(straightPath, 20, 0.15, 8, false);
+            const tex = createILLTexture();
+            const illTube = new THREE.Mesh(illTubeGeo, new THREE.MeshBasicMaterial({ map: tex, color: 0x3b82f6, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
+            illTube.position.copy(deptPos);
+            illTube.lookAt(ispPos);
+            scene.add(illTube);
+
+            const illOuterGeo = new THREE.TubeGeometry(straightPath, 20, 0.22, 6, false);
+            const illOuterTube = new THREE.Mesh(illOuterGeo, new THREE.MeshBasicMaterial({ color: 0x1e3a8a, wireframe: true, transparent: true, opacity: 0.3 }));
+            illOuterTube.position.copy(deptPos);
+            illOuterTube.lookAt(ispPos);
+            scene.add(illOuterTube);
+
+            const illMidpoint = new THREE.Vector3().lerpVectors(deptPos, ispPos, 0.5);
+            createHTMLLabel(`Dept ${index+1}`, '', 2.5, deptServer);
+            const agentLabelEl = createHTMLLabel(`SLA Agent ${index+1}`, 'agent-label', 1.5, virtualAgent);
+            
+            const illDummy = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1));
+            illDummy.position.copy(illMidpoint);
+            createHTMLLabel('ILL', 'ill-label', 0.8, illDummy);
+
+            departments.push({ index, mesh: deptServer, agent: virtualAgent, mat: deptMat, pos: deptPos, agentLabel: agentLabelEl, outerTube: illOuterTube });
+        }
+
+        addDepartmentNode();
+        document.getElementById('btn-add-dept').addEventListener('click', () => { if(departments.length < 5) addDepartmentNode(); });
+
+        // --- 3. UI & Metrics ---
+        let metrics = { sent: 0, success: 0, lost: 0, totalRTT: 0 };
+        const ui = {
+            latency: document.getElementById('latency-slider'), loss: document.getElementById('loss-slider'),
+            latVal: document.getElementById('latency-val'), lossVal: document.getElementById('loss-val'),
+            sent: document.getElementById('m-sent'), success: document.getElementById('m-success'),
+            lost: document.getElementById('m-lost'), rtt: document.getElementById('m-rtt')
+        };
+        ui.latency.addEventListener('input', e => ui.latVal.innerText = e.target.value + 'ms');
+        ui.loss.addEventListener('input', e => ui.lossVal.innerText = e.target.value + '%');
+
+        function updateMetrics() {
+            ui.sent.innerText = metrics.sent; ui.success.innerText = metrics.success; ui.lost.innerText = metrics.lost;
+            ui.rtt.innerText = (metrics.success > 0 ? Math.round(metrics.totalRTT / metrics.success) : 0) + 'ms';
+        }
+
+        // --- 4. REWRITTEN Packet Logic (Bulletproof Routing) ---
+        const packets = [];
+        const packetGeo = new THREE.SphereGeometry(0.25, 16, 16);
+        const glowGeo = new THREE.SphereGeometry(0.4, 16, 16);
+
+        class Packet {
+            constructor(deptIndex) {
+                this.deptIndex = deptIndex;
+                const startPos = departments[deptIndex].pos;
+
+                this.mesh = new THREE.Group();
+                this.coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
+                const core = new THREE.Mesh(packetGeo, this.coreMat);
+                this.glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+                const glow = new THREE.Mesh(glowGeo, this.glowMat);
+                this.mesh.add(core); this.mesh.add(glow);
+
+                // Nodes: 0 = Dept, 1 = ISP, 2 = Main
+                this.path = [startPos, ispPos, mainPos];
+                this.currentNode = 0; 
+                this.direction = 1; 
+                this.progress = 0;
+                this.active = true;
+                
+                this.mesh.position.copy(startPos);
+                scene.add(this.mesh);
+                metrics.sent++; updateMetrics();
+            }
+
+            update(delta) {
+                if (!this.active) return;
+                
+                const latencyMs = parseInt(ui.latency.value);
+                const speed = 2.0 / (latencyMs / 100); 
+                this.progress += speed * delta;
+                
+                this.mesh.children[1].scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
+
+                if (this.progress >= 1) {
+                    this.progress = 0;
+                    this.currentNode += this.direction;
+
+                    // Loss condition: Only triggered when completing the hop between Dept(0) and ISP(1)
+                    const lossProb = parseInt(ui.loss.value) / 100;
+                    if (Math.random() < lossProb) {
+                        if ((this.direction === 1 && this.currentNode === 1) || (this.direction === -1 && this.currentNode === 0)) {
+                            this.drop(); return;
+                        }
+                    }
+
+                    // Turnaround logic at the far ends
+                    if (this.currentNode === 2 && this.direction === 1) {
+                        this.direction = -1; // Bounce back
+                        this.glowMat.color.setHex(0x4ade80); // Turn green
+                    } else if (this.currentNode === 0 && this.direction === -1) {
+                        this.success(); return; // Made it back home
+                    }
+                }
+                
+                // Safe interpolation using clean node indices
+                if (this.active) {
+                    const p1 = this.path[this.currentNode];
+                    const p2 = this.path[this.currentNode + this.direction];
+                    
+                    this.mesh.position.lerpVectors(p1, p2, this.progress);
+                    
+                    // Add arc bounce ONLY on the standard WAN hop (between ISP [1] and Main [2])
+                    if ((this.currentNode === 1 && this.direction === 1) || (this.currentNode === 2 && this.direction === -1)) {
+                        this.mesh.position.y += Math.sin(this.progress * Math.PI) * 0.4; 
+                    }
+                }
+            }
+
+            drop() {
+                this.active = false;
+                this.glowMat.color.setHex(0xf87171); 
+                this.coreMat.color.setHex(0xffaaaa);
+                metrics.lost++; updateMetrics();
+                
+                const dropAnim = setInterval(() => {
+                    this.mesh.position.y -= 0.1;
+                    this.mesh.scale.multiplyScalar(0.9);
+                    if (this.mesh.position.y < -2) {
+                        clearInterval(dropAnim); scene.remove(this.mesh); 
+                        this.coreMat.dispose(); this.glowMat.dispose();
+                    }
+                }, 30);
+            }
+
+            success() {
+                this.active = false;
+                const baseLatency = parseInt(ui.latency.value) * 2;
+                metrics.totalRTT += (baseLatency + Math.floor(Math.random() * 20)); 
+                metrics.success++; updateMetrics();
+                scene.remove(this.mesh); 
+                this.coreMat.dispose(); this.glowMat.dispose();
+            }
+        }
+
+        document.getElementById('btn-send').addEventListener('click', () => {
+            departments.forEach(dept => packets.push(new Packet(dept.index)));
+        });
+
+        // --- 5. Mouse Interaction ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        function updateUIPositions() {
+            uiLabels.forEach(label => {
+                if(label.isAgent) return; 
+                
+                const vector = new THREE.Vector3();
+                if(label.mesh.isGroup || label.mesh.parent === scene) {
+                    vector.copy(label.mesh.position);
+                } else {
+                    label.mesh.getWorldPosition(vector);
+                }
+                
+                vector.y += label.offset;
+                vector.project(camera);
+                
+                if (vector.z > 1) { label.el.style.display = 'none'; } 
+                else {
+                    label.el.style.display = 'block';
+                    label.el.style.left = `${(vector.x * .5 + .5) * window.innerWidth}px`;
+                    label.el.style.top = `${(vector.y * -.5 + .5) * window.innerHeight}px`;
+                }
+            });
+        }
+
+        // --- 6. Render Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            controls.update();
+            updateUIPositions();
+
+            illTextures.forEach(tex => tex.offset.x -= 1.5 * delta);
+            
+            departments.forEach(dept => {
+                dept.outerTube.rotateZ(0.5 * delta); 
+                dept.agent.scale.setScalar(1 + Math.sin(Date.now() * 0.005) * 0.1); 
+            });
+
+            raycaster.setFromCamera(mouse, camera);
+            departments.forEach(dept => {
+                const intersects = raycaster.intersectObject(dept.mesh);
+                if (intersects.length > 0) {
+                    dept.mat.opacity = 0.3; 
+                    const vector = new THREE.Vector3();
+                    dept.agent.getWorldPosition(vector);
+                    vector.y += 1.5; 
+                    vector.project(camera);
+                    
+                    dept.agentLabel.style.display = 'block';
+                    dept.agentLabel.style.left = `${(vector.x * .5 + .5) * window.innerWidth}px`;
+                    dept.agentLabel.style.top = `${(vector.y * -.5 + .5) * window.innerHeight}px`;
+                } else {
+                    dept.mat.opacity = 1.0;
+                    dept.agentLabel.style.display = 'none';
+                }
+            });
+
+            for (let i = packets.length - 1; i >= 0; i--) {
+                packets[i].update(delta);
+                if (!packets[i].active && packets[i].mesh.parent !== scene) packets.splice(i, 1);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
