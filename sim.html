@@ -618,6 +618,14 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
                 // Drop immediately if downtime is active — count as sent + lost
                 if (downtimeActive) {
                     metrics.sent++; metrics.lost++; updateMetrics();
+                    if (slaSocket && slaSocket.readyState === WebSocket.OPEN) {
+                        slaSocket.send(JSON.stringify({
+                            type: 'packet', event: 'drop',
+                            latency: parseInt(ui.latency.value),
+                            bytes: this.bytes, dept: this.deptIndex,
+                            downtime: true, ts: Date.now()
+                        }));
+                    }
                     this.active = false;
                     this.mesh = new THREE.Group();
                     return;
@@ -704,6 +712,15 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
                 this.glowMat.color.setHex(0xf87171); 
                 this.coreMat.color.setHex(0xffaaaa);
                 metrics.lost++; updateMetrics();
+
+                // Per-packet telemetry → Prometheus via server
+                if (slaSocket && slaSocket.readyState === WebSocket.OPEN) {
+                    slaSocket.send(JSON.stringify({
+                        type: 'packet', event: 'drop',
+                        latency: Math.round(this.packetLatency),
+                        bytes: this.bytes, dept: this.deptIndex, ts: Date.now()
+                    }));
+                }
                 
                 const dropAnim = setInterval(() => {
                     this.mesh.position.y -= 0.1;
@@ -721,14 +738,25 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
                 const rtt = this.packetLatency * 2;
                 metrics.totalRTT += rtt;
                 
+                const jitter = metrics.success > 0 ? Math.abs(rtt - metrics.lastRTT) : 0;
                 if (metrics.success > 0) {
-                    const jitter = Math.abs(rtt - metrics.lastRTT);
                     metrics.totalJitter += jitter;
                 }
                 metrics.lastRTT = rtt;
                 metrics.totalBytes += this.bytes;
                 metrics.success++; 
                 
+                // Per-packet telemetry → Prometheus via server
+                if (slaSocket && slaSocket.readyState === WebSocket.OPEN) {
+                    slaSocket.send(JSON.stringify({
+                        type: 'packet', event: 'success',
+                        rtt: Math.round(rtt),
+                        jitter: Math.round(jitter),
+                        latency: Math.round(this.packetLatency),
+                        bytes: this.bytes, dept: this.deptIndex, ts: Date.now()
+                    }));
+                }
+
                 updateMetrics();
                 scene.remove(this.mesh); 
                 this.coreMat.dispose(); this.glowMat.dispose();

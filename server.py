@@ -46,6 +46,20 @@ except ImportError:
     from websockets.http11 import Request, Response
     from websockets.datastructures import Headers
 
+try:
+    from prometheus_client import (
+        CollectorRegistry, Counter, Gauge, Histogram,
+        generate_latest, CONTENT_TYPE_LATEST,
+    )
+except ImportError:
+    import subprocess, sys
+    print("Installing 'prometheus_client' package...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "prometheus_client"])
+    from prometheus_client import (
+        CollectorRegistry, Counter, Gauge, Histogram,
+        generate_latest, CONTENT_TYPE_LATEST,
+    )
+
 PORT = 8080
 DIR  = Path(__file__).parent.resolve()
 
@@ -74,6 +88,87 @@ _last_alert: dict[str, float] = {}
 
 # -- Connected clients --------------------------------------------------------
 CLIENTS: set = set()
+
+# -- Prometheus metrics registry ----------------------------------------------
+_prom = CollectorRegistry(auto_describe=True)
+
+# Per-packet counters & histograms (updated from individual packet events)
+_prom_pkts_total  = Counter(
+    "tanfinet_packets_total", "Packets processed",
+    ["result"], registry=_prom,
+)
+_prom_rtt_hist    = Histogram(
+    "tanfinet_packet_rtt_ms", "One-way RTT per packet (ms)",
+    buckets=[10, 25, 50, 100, 200, 300, 500, 750, 1000, 2000],
+    registry=_prom,
+)
+_prom_jitter_hist = Histogram(
+    "tanfinet_packet_jitter_ms", "Jitter per packet (ms)",
+    buckets=[0, 1, 5, 10, 20, 50, 100, 200],
+    registry=_prom,
+)
+_prom_bytes_hist  = Histogram(
+    "tanfinet_packet_bytes", "Payload size per packet (bytes)",
+    buckets=[64, 128, 256, 512, 1024, 2048, 4096],
+    registry=_prom,
+)
+_prom_latency_hist = Histogram(
+    "tanfinet_packet_latency_ms", "One-way configured latency per packet (ms)",
+    buckets=[10, 25, 50, 100, 200, 300, 500, 750, 1000, 2000],
+    registry=_prom,
+)
+
+# Aggregate gauges (updated from the 1-second heartbeat)
+_prom_loss_rate    = Gauge("tanfinet_loss_rate_percent",    "Packet loss rate %",             registry=_prom)
+_prom_success_rate = Gauge("tanfinet_success_rate_percent", "Packet delivery success rate %", registry=_prom)
+_prom_avg_rtt      = Gauge("tanfinet_avg_rtt_ms",           "Average RTT ms",                 registry=_prom)
+_prom_avg_jitter   = Gauge("tanfinet_avg_jitter_ms",        "Average jitter ms",              registry=_prom)
+_prom_bandwidth    = Gauge("tanfinet_bandwidth_mbps",       "Configured bandwidth Mbps",      registry=_prom)
+_prom_load         = Gauge("tanfinet_load_percent",         "Network load %",                 registry=_prom)
+_prom_downtime     = Gauge("tanfinet_downtime_active",      "1 when downtime is active",      registry=_prom)
+_prom_cfg_latency  = Gauge("tanfinet_config_latency_ms",   "Configured base latency ms",     registry=_prom)
+_prom_cfg_jitter   = Gauge("tanfinet_config_jitter_ms",   "Configured jitter range ms",     registry=_prom)
+_prom_cfg_loss     = Gauge("tanfinet_config_loss_pct",     "Configured loss probability %",  registry=_prom)
+_prom_departments  = Gauge("tanfinet_departments",          "Active department count",        registry=_prom)
+_prom_data_kb      = Gauge("tanfinet_data_kb",              "Cumulative data sent KB",        registry=_prom)
+_prom_sent         = Gauge("tanfinet_packets_sent_total",   "Total packets sent (cumulative)",registry=_prom)
+_prom_success_cnt  = Gauge("tanfinet_packets_success_total","Total packets delivered",        registry=_prom)
+_prom_lost_cnt     = Gauge("tanfinet_packets_lost_total",   "Total packets lost",             registry=_prom)
+
+
+def _update_prometheus_aggregate(data: dict) -> None:
+    """Update aggregate Prometheus gauges from the 1-second heartbeat."""
+    _prom_loss_rate.set(data.get("lossRate", 0))
+    _prom_success_rate.set(data.get("successRate", 100))
+    _prom_avg_rtt.set(data.get("avgRTT", 0))
+    _prom_avg_jitter.set(data.get("avgJitter", 0))
+    _prom_bandwidth.set(data.get("bandwidth", 0))
+    _prom_load.set(data.get("load", 0))
+    _prom_downtime.set(1 if data.get("downtimeActive") else 0)
+    _prom_cfg_latency.set(data.get("configLatency", 0))
+    _prom_cfg_jitter.set(data.get("configJitter", 0))
+    _prom_cfg_loss.set(data.get("configLoss", 0))
+    _prom_departments.set(data.get("departments", 0))
+    _prom_data_kb.set(data.get("dataKB", 0))
+    _prom_sent.set(data.get("sent", 0))
+    _prom_success_cnt.set(data.get("success", 0))
+    _prom_lost_cnt.set(data.get("lost", 0))
+
+
+def _update_prometheus_packet(data: dict) -> None:
+    """Update per-packet Prometheus metrics from an individual packet event."""
+    event   = data.get("event", "unknown")   # "success" or "drop"
+    rtt     = data.get("rtt", 0)
+    jitter  = data.get("jitter", 0)
+    latency = data.get("latency", 0)
+    nbytes  = data.get("bytes", 0)
+
+    _prom_pkts_total.labels(result=event).inc()
+
+    if rtt     > 0: _prom_rtt_hist.observe(rtt)
+    if jitter  > 0: _prom_jitter_hist.observe(jitter)
+    if latency > 0: _prom_latency_hist.observe(latency)
+    if nbytes  > 0: _prom_bytes_hist.observe(nbytes)
 
 # -- Email alert helper ------------------------------------------------------
 def send_violation_email(violations: list[dict]) -> None:
@@ -318,6 +413,11 @@ async def relay(websocket):
             except (json.JSONDecodeError, TypeError):
                 data = None
 
+            # ── Per-packet event (not relayed to dashboard) ──────────────
+            if isinstance(data, dict) and data.get("type") == "packet":
+                _update_prometheus_packet(data)
+                continue  # do not relay individual packet events
+
             # ── Dashboard config message (not relayed) ───────────────────
             if isinstance(data, dict) and data.get("type") == "config":
                 if "emailEnabled" in data:
@@ -328,6 +428,10 @@ async def relay(websocket):
                     ALERT_TO = recipients
                     print(f"  [CONFIG] Alert recipients updated: {', '.join(ALERT_TO) or '(none)'}")
                 continue  # config messages are never relayed
+
+            # ── Prometheus aggregate update ──────────────────────────────
+            if isinstance(data, dict):
+                _update_prometheus_aggregate(data)
 
             # ── Violation detection ──────────────────────────────────────
             if isinstance(data, dict):
@@ -369,6 +473,18 @@ async def http_handler(connection, request: Request):
         return Response(403, "Forbidden",
                         Headers([("Content-Type", "text/plain")]),
                         b"403 Forbidden")
+
+    # Prometheus metrics scrape endpoint
+    if raw == "metrics":
+        body = generate_latest(_prom)
+        return Response(
+            200, "OK",
+            Headers([
+                ("Content-Type",   CONTENT_TYPE_LATEST),
+                ("Content-Length", str(len(body))),
+            ]),
+            body,
+        )
 
     if target.is_file():
         body = target.read_bytes()
