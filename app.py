@@ -96,8 +96,8 @@ st.markdown(f"""
        style="width: 70px; height: auto; display: block;">
 
   <div style="display: flex; flex-direction: column; justify-content: center;">
-    <p class="app-title" style="margin: 0; font-size: 1.75rem; font-weight: 600;">TANFINET ILL-SLA Audit Monitor</p>
-    <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation — Performance Audit</p>
+    <p class="app-title" style="margin: 0; font-size: 1.75rem; font-weight: 600;">TANFINET ILL-SLA Compliance Monitor</p>
+    <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation — Performance Audit Generator</p>
   </div>
     <img src="data:image/png;base64,{logo_base64}" 
        style="width: 110px; height: auto; display: block;">
@@ -136,6 +136,22 @@ with st.sidebar:
     with st.expander("Advanced Configuration"):
         random_seed = st.number_input("Random Seed", min_value=0, max_value=9999, value=42, step=1)
         output_fname = st.text_input("Output Filename", value=f"TANFINET_ILL_SLA_{year_val}_{month_num:02d}.pdf")
+
+    st.write("")
+    st.markdown("<p style='font-size: 0.85rem; font-weight: 600; color: #5f5e5b; margin-bottom: 0.25rem;'>SLA DOCUMENT UPLOAD</p>", unsafe_allow_html=True)
+    _dept_names = [name for name, _cid, _cap, _sla in rpt.DEFAULT_DEPARTMENTS]
+    sla_dept_selection = st.selectbox(
+        "Department",
+        options=_dept_names,
+        index=0,
+    )
+    sla_uploaded_file = st.file_uploader(
+        "Upload SLA Document",
+        type=["pdf", "docx", "doc", "xlsx", "xls", "csv", "txt"],
+        help="Upload the SLA reference document for the selected department.",
+    )
+    if sla_uploaded_file is not None:
+        st.caption(f"Loaded: {sla_uploaded_file.name} ({sla_uploaded_file.size / 1024:.1f} KB)")
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  MAIN AREA
