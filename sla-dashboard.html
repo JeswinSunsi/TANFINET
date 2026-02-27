@@ -777,8 +777,8 @@ function updateChartThresholds(sla) {
     jitterChart.update('none');
 }
 
-// ─── BroadcastChannel Listener ───────────────────────────────────────────
-const channel = new BroadcastChannel('tanfinet-sla-metrics');
+// ─── WebSocket Listener ──────────────────────────────────────────────────
+const WS_URL     = `ws://${location.hostname}:8080`;
 const connStatus  = document.getElementById('conn-status');
 const connLabel   = document.getElementById('conn-label');
 const lastUpdate  = document.getElementById('last-update');
@@ -790,29 +790,43 @@ function setOffline() {
     connLabel.textContent = 'SIM DISCONNECTED';
 }
 
-channel.addEventListener('message', (e) => {
-    const data = e.data;
+function connectDashWS() {
+    const ws = new WebSocket(WS_URL);
 
-    // Connection indicator
-    connStatus.className = 'online';
-    connLabel.textContent = 'SIMULATOR LIVE';
-    clearTimeout(offlineTimer);
-    offlineTimer = setTimeout(setOffline, 3500);
+    ws.onopen = () => {
+        connStatus.className = 'waiting';
+        connLabel.textContent = 'WAITING FOR SIM';
+    };
 
-    // Last update time
-    const now = new Date(data.timestamp);
-    lastUpdate.textContent = `Last active: ${now.toTimeString().split(' ')[0]}`;
+    ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
 
-    // Evaluate metrics
-    evaluate(data);
+        // Connection indicator
+        connStatus.className = 'online';
+        connLabel.textContent = 'SIMULATOR LIVE';
+        clearTimeout(offlineTimer);
+        offlineTimer = setTimeout(setOffline, 3500);
 
-    // Update Charts
-    const sla  = getSLA();
-    const tick = now.toTimeString().substring(3, 8); // MM:SS
-    pushChartData(rttChart,    tick, data.avgRTT,    sla.maxRTT);
-    pushChartData(lossChart,   tick, data.lossRate,  sla.maxLoss);
-    pushChartData(jitterChart, tick, data.avgJitter, sla.maxJitter);
-});
+        // Last update time
+        const now = new Date(data.timestamp);
+        lastUpdate.textContent = `Last active: ${now.toTimeString().split(' ')[0]}`;
+
+        // Evaluate metrics
+        evaluate(data);
+
+        // Update Charts
+        const sla  = getSLA();
+        const tick = now.toTimeString().substring(3, 8); // MM:SS
+        pushChartData(rttChart,    tick, data.avgRTT,    sla.maxRTT);
+        pushChartData(lossChart,   tick, data.lossRate,  sla.maxLoss);
+        pushChartData(jitterChart, tick, data.avgJitter, sla.maxJitter);
+    };
+
+    ws.onclose = () => { setOffline(); setTimeout(connectDashWS, 2000); };
+    ws.onerror = () => ws.close();
+}
+
+connectDashWS();
 
 // Initialize Settings
 refreshSLALabels();

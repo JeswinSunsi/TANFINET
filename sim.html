@@ -832,32 +832,42 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
 
         animate();
 
-        // --- SLA Broadcast Channel ---
-        const slaChannel = new BroadcastChannel('tanfinet-sla-metrics');
+        // --- SLA WebSocket Relay ---
+        const WS_URL = `ws://${location.hostname}:8080`;
+        let slaSocket = null;
+        function connectSlaWS() {
+            slaSocket = new WebSocket(WS_URL);
+            slaSocket.onclose = () => setTimeout(connectSlaWS, 2000);
+            slaSocket.onerror = () => slaSocket.close();
+        }
+        connectSlaWS();
+
         setInterval(() => {
             const totalSent = metrics.sent;
             const lossRate  = totalSent > 0 ? (metrics.lost    / totalSent * 100) : 0;
             const successRate = totalSent > 0 ? (metrics.success / totalSent * 100) : 100;
             const avgRTT    = metrics.success > 0 ? Math.round(metrics.totalRTT  / metrics.success) : 0;
             const avgJitter = metrics.success > 1 ? Math.round(metrics.totalJitter / metrics.success) : 0;
-            slaChannel.postMessage({
-                timestamp:      Date.now(),
-                sent:           metrics.sent,
-                success:        metrics.success,
-                lost:           metrics.lost,
-                lossRate:       parseFloat(lossRate.toFixed(2)),
-                successRate:    parseFloat(successRate.toFixed(2)),
-                avgRTT,
-                avgJitter,
-                dataKB:         parseFloat((metrics.totalBytes / 1024).toFixed(1)),
-                bandwidth:      parseInt(ui.bandwidth.value),
-                load:           parseInt(ui.load.value),
-                downtimeActive,
-                departments:    departments.length,
-                configLatency:  parseInt(ui.latency.value),
-                configJitter:   parseInt(ui.jitter.value),
-                configLoss:     parseInt(ui.loss.value)
-            });
+            if (slaSocket && slaSocket.readyState === WebSocket.OPEN) {
+                slaSocket.send(JSON.stringify({
+                    timestamp:      Date.now(),
+                    sent:           metrics.sent,
+                    success:        metrics.success,
+                    lost:           metrics.lost,
+                    lossRate:       parseFloat(lossRate.toFixed(2)),
+                    successRate:    parseFloat(successRate.toFixed(2)),
+                    avgRTT,
+                    avgJitter,
+                    dataKB:         parseFloat((metrics.totalBytes / 1024).toFixed(1)),
+                    bandwidth:      parseInt(ui.bandwidth.value),
+                    load:           parseInt(ui.load.value),
+                    downtimeActive,
+                    departments:    departments.length,
+                    configLatency:  parseInt(ui.latency.value),
+                    configJitter:   parseInt(ui.jitter.value),
+                    configLoss:     parseInt(ui.loss.value)
+                }));
+            }
         }, 1000);
     </script>
 </body>
