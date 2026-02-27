@@ -50,6 +50,7 @@
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
+            overflow-y: auto;
             z-index: 10;
         }
 
@@ -347,6 +348,101 @@
         .vlog-entry.breach .vtitle { color: var(--status-breach); }
         .vlog-entry.warn .vtitle { color: var(--status-warn); }
         .vdesc { color: var(--text-main); }
+
+        /* ─── Email Alert Recipients ───────────────────────────── */
+        .email-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle-switch input[type="checkbox"] { display: none; }
+        .toggle-track {
+            width: 36px; height: 20px;
+            background: var(--border-med);
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .toggle-track::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 14px; height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-switch input:checked + .toggle-track { background: var(--status-ok); }
+        .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+        .toggle-switch-text {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .toggle-switch input:checked ~ .toggle-switch-text { color: var(--status-ok); }
+
+        .recipient-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .recipient-row input[type="email"] {
+            flex: 1;
+            padding: 7px 10px;
+            font-size: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--border-med);
+            border-radius: 6px;
+            color: var(--text-main);
+            transition: all 0.2s;
+            min-width: 0;
+        }
+        .recipient-row input[type="email"]:focus {
+            outline: none;
+            border-color: var(--brand-blue);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+        .btn-remove-recipient {
+            flex-shrink: 0;
+            width: 24px; height: 24px;
+            background: none;
+            border: 1px solid var(--border-med);
+            border-radius: 4px;
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-remove-recipient:hover { background: var(--status-breach-bg); border-color: var(--status-breach); color: var(--status-breach); }
+        .btn-remove-recipient:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+        #btn-add-recipient {
+            width: 100%;
+            padding: 7px 12px;
+            background: none;
+            border: 1px dashed var(--border-med);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 2px;
+        }
+        #btn-add-recipient:hover { background: var(--bg-body); border-color: var(--brand-blue); color: var(--brand-blue); }
+        #email-section.disabled { opacity: 0.45; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -365,7 +461,7 @@
         </div>
     </div>
 
-    <div class="sidebar-section" style="flex: 1; border-bottom: none;">
+    <div class="sidebar-section" style="border-bottom: none;">
         <div class="section-header">SLA Thresholds</div>
         
         <div class="form-group">
@@ -413,6 +509,27 @@
             </div>
         </div>
     </div>
+
+    <hr style="border:none;border-top:1px solid var(--border-light);margin:0;">
+
+    <!-- Email Alert Recipients -->
+    <div class="sidebar-section">
+        <div class="section-header">
+            Alert Recipients
+        </div>
+        <div class="email-toggle-row">
+            <span style="font-size:0.8rem;font-weight:500;color:var(--text-main);">Send email alerts</span>
+            <label class="toggle-switch" title="Enable or disable violation alert emails">
+                <input type="checkbox" id="email-enabled">
+                <span class="toggle-track"></span>
+                <span class="toggle-switch-text" id="email-enabled-label">ON</span>
+            </label>
+        </div>
+        <div id="email-section">
+            <div id="recipients-list"></div>
+            <button id="btn-add-recipient">+ Add Recipient</button>
+        </div>
+    </div>
 </aside>
 
 <main>
@@ -449,11 +566,11 @@
                 <div class="mcard-sla">Limit: <span id="lbl-sla-jitter">20</span> ms</div>
                 <div class="mcard-status" id="status-jitter">Standby</div>
             </div>
-            <div class="mcard" id="card-success">
+            <div class="mcard ok" id="card-success">
                 <div class="mcard-title">Success Rate</div>
-                <div class="mcard-value" id="val-success">—</div>
+                <div class="mcard-value" id="val-success">100.00%</div>
                 <div class="mcard-sla">Minimum: <span id="lbl-sla-success">99.00</span>%</div>
-                <div class="mcard-status" id="status-success">Standby</div>
+                <div class="mcard-status" id="status-success">Healthy</div>
             </div>
             <div class="mcard" id="card-bw">
                 <div class="mcard-title">Bandwidth (CIR)</div>
@@ -556,6 +673,67 @@ function refreshSLALabels() {
 
 Object.values(slaInputs).forEach(inp => inp.addEventListener('input', refreshSLALabels));
 
+// ─── Email Alert Recipients ───────────────────────────────────────────────
+let dashWS = null; // exposed so email config sender can use it
+
+const emailEnabledEl     = document.getElementById('email-enabled');
+const emailEnabledLabel  = document.getElementById('email-enabled-label');
+const emailSectionEl     = document.getElementById('email-section');
+const recipientsListEl   = document.getElementById('recipients-list');
+
+function sendEmailConfig() {
+    if (!dashWS || dashWS.readyState !== WebSocket.OPEN) return;
+    const enabled    = emailEnabledEl.checked;
+    const inputs     = recipientsListEl.querySelectorAll('input[type="email"]');
+    const recipients = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+    dashWS.send(JSON.stringify({ type: 'config', emailEnabled: enabled, alertTo: recipients }));
+}
+
+function syncRemoveButtons() {
+    const btns = recipientsListEl.querySelectorAll('.btn-remove-recipient');
+    btns.forEach(b => { b.disabled = btns.length === 1; });
+}
+
+function addRecipient(email = '') {
+    const row = document.createElement('div');
+    row.className = 'recipient-row';
+    const inp = document.createElement('input');
+    inp.type        = 'email';
+    inp.placeholder = 'email@example.com';
+    inp.value       = email;
+    inp.addEventListener('change', () => { sendEmailConfig(); });
+    const rm = document.createElement('button');
+    rm.className   = 'btn-remove-recipient';
+    rm.title       = 'Remove recipient';
+    rm.textContent = '×';
+    rm.addEventListener('click', () => {
+        row.remove();
+        syncRemoveButtons();
+        sendEmailConfig();
+    });
+    row.appendChild(inp);
+    row.appendChild(rm);
+    recipientsListEl.appendChild(row);
+    syncRemoveButtons();
+}
+
+// Seed default recipient
+addRecipient('jeswinsunsi@gmail.com');
+
+document.getElementById('btn-add-recipient').addEventListener('click', () => {
+    addRecipient('');
+    // Focus the new input
+    const rows = recipientsListEl.querySelectorAll('.recipient-row');
+    rows[rows.length - 1].querySelector('input').focus();
+});
+
+emailEnabledEl.addEventListener('change', () => {
+    const on = emailEnabledEl.checked;
+    emailEnabledLabel.textContent = on ? 'ON' : 'OFF';
+    emailSectionEl.classList.toggle('disabled', !on);
+    sendEmailConfig();
+});
+
 // ─── Session Counters ────────────────────────────────────────────────────
 let violationCount = 0;
 const HISTORY_MAX  = 60; // data points shown on chart
@@ -605,7 +783,7 @@ function setCard(cardId, valId, statusId, rawValue, displayValue, state, statusT
     statEl.textContent = statusText;
 }
 
-const prevState = { loss: null, rtt: null, jitter: null, success: null, bw: null };
+const prevState = { loss: null, rtt: null, jitter: null, success: 'ok', bw: null };
 
 function evaluate(data) {
     const sla = getSLA();
@@ -792,10 +970,13 @@ function setOffline() {
 
 function connectDashWS() {
     const ws = new WebSocket(WS_URL);
+    dashWS = ws;
 
     ws.onopen = () => {
         connStatus.className = 'waiting';
         connLabel.textContent = 'WAITING FOR SIM';
+        // Push current email config to server on (re)connect
+        sendEmailConfig();
     };
 
     ws.onmessage = (e) => {
