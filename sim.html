@@ -393,9 +393,13 @@
             }
         }
 
-        document.getElementById('btn-send').addEventListener('click', () => {
-            departments.forEach(dept => packets.push(new Packet(dept.index)));
-        });
+document.getElementById('btn-send').addEventListener('click', () => {
+    departments.forEach((dept, i) => {
+        setTimeout(() => {
+            packets.push(new Packet(dept.index));
+        }, i * 200); // 200ms stagger delay per department
+    });
+});
 
         // --- 5. Mouse Interaction ---
         const raycaster = new THREE.Raycaster();
