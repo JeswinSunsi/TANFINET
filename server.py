@@ -61,7 +61,7 @@ SMTP_PASSWORD   = os.environ.get("API_KEY", "")  # set env var APIKEY before run
 # SLA thresholds (mirror the dashboard defaults)
 SLA = {
     "maxLoss":    1.0,    # % packet loss
-    "maxRTT":     200,    # ms
+    "maxRTT":     300,    # ms
     "maxJitter":  20,     # ms
     "minSuccess": 99.0,   # % delivery success
     "minBW":      10,     # Mbps

@@ -843,9 +843,11 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
         connectSlaWS();
 
         setInterval(() => {
-            const totalSent = metrics.sent;
-            const lossRate  = totalSent > 0 ? (metrics.lost    / totalSent * 100) : 0;
-            const successRate = totalSent > 0 ? (metrics.success / totalSent * 100) : 100;
+            // Use completed (success + lost) as the denominator so in-flight
+            // packets don't falsely deflate the success/loss rates.
+            const completed   = metrics.success + metrics.lost;
+            const lossRate    = completed > 0 ? (metrics.lost    / completed * 100) : 0;
+            const successRate = completed > 0 ? (metrics.success / completed * 100) : 100;
             const avgRTT    = metrics.success > 0 ? Math.round(metrics.totalRTT  / metrics.success) : 0;
             const avgJitter = metrics.success > 1 ? Math.round(metrics.totalJitter / metrics.success) : 0;
             if (slaSocket && slaSocket.readyState === WebSocket.OPEN) {
