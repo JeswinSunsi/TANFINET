@@ -72,17 +72,25 @@ def get_image_base64(image_path):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except Exception:
-        return "" # Returns empty if file isn't found so the app doesn't crash
+        return ""
 
-# Change 'logo1.png' to the actual name of your logo file in your folder
 logo_base64 = get_image_base64("logo3.png")
 
 st.markdown(f"""
-<div class="app-header" style="display: flex; align-items: center; justify-content: center; gap: 1.5rem;">
-  <img src="data:image/png;base64,{logo_base64}" style="width: 80px; height: auto; border-radius: 4px;">
-  <div>
-    <p class="app-title">TANFINET ILL SLA Report Generator</p>
-    <p class="app-subtitle">Tamil Nadu FibreNet Corporation — Bandwidth Performance Audit</p>
+<div class="app-header" style="
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: left;
+    gap: 1.5rem;
+    width: 100%;
+">
+  <img src="data:image/png;base64,{logo_base64}" 
+       style="width: 80px; height: auto; display: block;">
+
+  <div style="display: flex; flex-direction: column; justify-content: center;">
+    <p class="app-title" style="margin: 0;">TANFINET ILL-SLA Audit Monitor</p>
+    <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation — Performance Audit</p>
   </div>
 </div>
 """, unsafe_allow_html=True)
