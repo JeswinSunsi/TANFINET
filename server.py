@@ -67,10 +67,9 @@ SLA = {
     "minBW":      10,     # Mbps
 }
 
-# Cooldown period between repeat emails for the same metric (seconds)
+
 VIOLATION_COOLDOWN = 300   # 5 minutes
 
-# Tracks when each metric last triggered an alert  {metric_key: epoch_time}
 _last_alert: dict[str, float] = {}
 
 # -- Connected clients --------------------------------------------------------
@@ -130,7 +129,7 @@ def send_violation_email(violations: list[dict]) -> None:
             <p style="margin:0;font-size:11px;letter-spacing:2px;text-transform:uppercase;
                       color:#94a3b8;">Network Monitoring</p>
             <h1 style="margin:6px 0 0;font-size:22px;color:#f8fafc;font-weight:700;">
-              TANFINET ILL-SLA Violation Alert
+              TANFINET SLA Violation Alert
             </h1>
           </td>
         </tr>
