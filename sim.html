@@ -5,27 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D SLA Network Simulator</title>
     <style>
-:root {
+        :root {
             --bg-color: #0f172a;
-            --panel-bg: rgba(30, 41, 59, 0.15); /* Pushed transparency way up */
+            /* Increased transparency (lowered opacity from 0.15 to 0.08) */
+            --panel-bg: rgba(30, 41, 59, 0.08); 
             --text-main: #f8fafc;
             --text-muted: #cbd5e1;
             --border-color: rgba(255, 255, 255, 0.08); 
-            --metric-bg: rgba(15, 23, 42, 0.2); /* Made metric cards more transparent too */
+            --metric-bg: rgba(15, 23, 42, 0.15); 
             --btn-bg: #2563eb;
             --btn-hover: #1d4ed8;
             --label-bg: rgba(0,0,0,0.7);
             --label-border: #475569;
             --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            /* Decreased rounded corners */
+            --radius-main: 6px;
+            --radius-inner: 4px;
         }
 
         body.theme-light {
             --bg-color: #f1f5f9;
-            --panel-bg: rgba(255, 255, 255, 0.15); /* Pushed transparency way up */
+            /* Increased transparency */
+            --panel-bg: rgba(255, 255, 255, 0.1); 
             --text-main: #0f172a;
             --text-muted: #475569;
             --border-color: rgba(255, 255, 255, 0.4);
-            --metric-bg: rgba(255, 255, 255, 0.25); /* Made metric cards more transparent too */
+            --metric-bg: rgba(255, 255, 255, 0.2); 
             --btn-bg: #3b82f6;
             --btn-hover: #2563eb;
             --label-bg: rgba(255,255,255,0.9);
@@ -35,99 +40,203 @@
         
         body { margin: 0; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', sans-serif; transition: background-color 0.5s; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
-        
         #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5; overflow: hidden; }
 
-#dashboard {
+        #dashboard {
             position: absolute; top: 20px; left: 20px; width: 320px;
             background: var(--panel-bg); 
-            backdrop-filter: blur(16px); /* Stronger frosted blur */
-            -webkit-backdrop-filter: blur(16px); /* Safari support */
-            padding: 20px; border-radius: 16px; 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px); 
+            border-radius: var(--radius-main); 
             border: 1px solid var(--border-color);
-            border-top: 1px solid rgba(255, 255, 255, 0.2); /* Light catching glass edge */
+            border-top: 1px solid rgba(255, 255, 255, 0.2); 
             border-left: 1px solid rgba(255, 255, 255, 0.2);
             z-index: 10; 
             box-shadow: var(--glass-shadow); 
-            transition: all 0.5s;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        .dashboard-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .dashboard-content {
+            padding: 0 16px 16px 16px;
+            max-height: 80vh;
+            overflow-y: auto;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        .dashboard-content.collapsed {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+            overflow: hidden;
+            border-top: none;
+        }
+
+        #dashboard:not(:has(.collapsed)) .dashboard-header {
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 12px;
         }
         
-#theme-panel {
+        /* Custom Scrollbar */
+        .dashboard-content::-webkit-scrollbar { width: 4px; }
+        .dashboard-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+        
+       #theme-panel {
+
             position: absolute; top: 20px; right: 20px; z-index: 10;
-            background: var(--panel-bg); 
+
+            background: var(--panel-bg);
+
             backdrop-filter: blur(16px);
+
             -webkit-backdrop-filter: blur(16px);
-            padding: 10px 15px; border-radius: 12px; 
+
+            padding: 10px 15px; border-radius: 12px;
+
             border: 1px solid var(--border-color);
+
             border-top: 1px solid rgba(255, 255, 255, 0.2);
+
             border-left: 1px solid rgba(255, 255, 255, 0.2);
+
             box-shadow: var(--glass-shadow);
+
         }
-        
+
+       
+
         #theme-panel select { background: transparent; color: var(--text-main); border: none; font-size: 1rem; outline: none; cursor: pointer; }
+
         #theme-panel select option { color: #0f172a; }
 
-        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .control-group { margin-bottom: 15px; }
-        .control-group label { display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
-        input[type="range"] { width: 100%; cursor: pointer; }
+        .control-group { margin-bottom: 12px; }
+        .control-group label { display: block; font-size: 0.8rem; margin-bottom: 4px; color: var(--text-muted); }
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #38bdf8; height: 4px; }
         .value-display { float: right; font-weight: bold; color: #38bdf8; }
         
+        .toggle-container { display: flex; align-items: center; gap: 8px; margin: 12px 0; background: var(--metric-bg); padding: 8px 10px; border-radius: var(--radius-inner);}
+        .toggle-container label { margin: 0; font-weight: 600; font-size: 0.85rem; cursor: pointer;}
+        .toggle-container input { width: 14px; height: 14px; cursor: pointer; accent-color: #38bdf8;}
+
         button {
-            width: 100%; padding: 10px; background: var(--btn-bg); color: white; border: none;
-            border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer;
-            transition: background 0.2s; margin-top: 10px;
+            width: 100%; padding: 8px; background: var(--btn-bg); color: white; border: none;
+            border-radius: var(--radius-inner); font-size: 0.9rem; font-weight: bold; cursor: pointer;
+            transition: background 0.2s; margin-top: 4px;
         }
         button:hover { background: var(--btn-hover); }
-        button.secondary { background: transparent; border: 1px solid var(--btn-bg); color: var(--text-main); margin-top: 5px; }
-        button.secondary:hover { background: rgba(59, 130, 246, 0.2); }
+        button.secondary { background: transparent; border: 1px dashed var(--btn-bg); color: var(--text-main); margin-top: 8px; }
+        button.secondary:hover { background: rgba(59, 130, 246, 0.1); }
         
-        .metrics { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .metric-card { background: var(--metric-bg); padding: 10px; border-radius: 6px; text-align: center; border: 1px solid transparent; }
-        .metric-value { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
-        .text-green { color: #4ade80; } .text-red { color: #f87171; } .text-blue { color: #60a5fa; } .text-yellow { color: #facc15; }
+        /* Compacted Metrics */
+        .metrics { 
+            margin-top: 15px; 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 4px; 
+        }
+        .metric-card { 
+            background: var(--metric-bg); 
+            padding: 6px 4px; 
+            border-radius: var(--radius-inner); 
+            text-align: center; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .metric-title { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 0.95rem; font-weight: bold; margin-top: 2px; }
+        .text-green { color: #4ade80; } .text-red { color: #f87171; } .text-blue { color: #60a5fa; } .text-yellow { color: #facc15; } .text-purple { color: #c084fc; } .text-white { color: var(--text-main); }
         
         .node-label {
-            position: absolute; color: var(--text-main); font-size: 12px; font-weight: bold;
-            background: var(--label-bg); padding: 5px 10px; border-radius: 6px;
+            position: absolute; color: var(--text-main); font-size: 11px; font-weight: bold;
+            background: var(--label-bg); padding: 4px 8px; border-radius: var(--radius-inner);
             pointer-events: none; transform: translate(-50%, -50%);
             border: 1px solid var(--label-border); white-space: nowrap; transition: background 0.5s, color 0.5s;
         }
         
         .agent-label {
             display: none; background: rgba(147, 51, 234, 0.85); color: white;
-            border: 1px solid #d8b4fe; font-size: 14px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+            border: 1px solid #d8b4fe; font-size: 12px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
         }
         
-        .ill-label { color: #38bdf8; font-size: 11px; background: rgba(15, 23, 42, 0.8); border: 1px solid #3b82f6; font-style: italic;}
+        .ill-label { color: #000; font-size: 10px; background: rgba(255, 255, 255, 0.8); border: 0.5px solid #838383;}
+        
+        .chevron { transition: transform 0.3s; font-size: 0.8rem; }
+        .chevron.up { transform: rotate(180deg); }
     </style>
 </head>
 <body>
 
     <div id="theme-panel">
         <select id="theme-select">
-            <option value="dark">🌙 Dark Theme</option>
-            <option value="light">☀️ Light Theme</option>
+            <option value="dark">Dark Theme</option>
+            <option value="light">Light Theme</option>
         </select>
     </div>
 
     <div id="dashboard">
-        <h2>SLA Simulator Console</h2>
-        <div class="control-group">
-            <label>ILL Link Latency (ms) <span id="latency-val" class="value-display">100ms</span></label>
-            <input type="range" id="latency-slider" min="10" max="1000" value="100">
+        <div class="dashboard-header" id="dashboard-toggle">
+            <span>Control Panel</span>
+            <span class="chevron" id="toggle-icon">▼</span>
         </div>
-        <div class="control-group">
-            <label>ILL Packet Loss Prob. (%) <span id="loss-val" class="value-display">5%</span></label>
-            <input type="range" id="loss-slider" min="0" max="50" value="5">
-        </div>
-        <button id="btn-send">Trigger SLA Ping (All)</button>
-        <button id="btn-add-dept" class="secondary">+ Add Department Node</button>
-        <div class="metrics">
-            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Sent</div><div id="m-sent" class="metric-value text-blue">0</div></div>
-            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Success</div><div id="m-success" class="metric-value text-green">0</div></div>
-            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Lost</div><div id="m-lost" class="metric-value text-red">0</div></div>
-            <div class="metric-card"><div style="font-size: 0.75rem; color: #94a3b8;">Avg RTT</div><div id="m-rtt" class="metric-value text-yellow">0ms</div></div>
+        
+        <div class="dashboard-content" id="dashboard-content">
+            <div class="control-group">
+                <label>Base Link Latency <span id="latency-val" class="value-display">100ms</span></label>
+                <input type="range" id="latency-slider" min="10" max="1000" value="100">
+            </div>
+            <div class="control-group">
+                <label>Network Jitter <span id="jitter-val" class="value-display">15ms</span></label>
+                <input type="range" id="jitter-slider" min="0" max="200" value="15">
+            </div>
+            <div class="control-group">
+                <label>Packet Loss Prob. <span id="loss-val" class="value-display">2%</span></label>
+                <input type="range" id="loss-slider" min="0" max="50" value="2">
+            </div>
+            <div class="control-group">
+                <label>Traffic Load <span id="load-val" class="value-display">30%</span></label>
+                <input type="range" id="load-slider" min="1" max="100" value="30">
+            </div>
+            <div class="control-group">
+                <label>Payload Size <span id="size-val" class="value-display">512B</span></label>
+                <input type="range" id="size-slider" min="64" max="1500" value="512" step="64">
+            </div>
+
+            <div class="toggle-container">
+                <input type="checkbox" id="auto-ping">
+                <label for="auto-ping">Continuous Traffic</label>
+            </div>
+
+            <button id="btn-send">Trigger Manual Burst</button>
+            <button id="btn-add-dept" class="secondary">+ Add Node</button>
+            
+            <div class="metrics">
+                <div class="metric-card"><div class="metric-title">Sent</div><div id="m-sent" class="metric-value text-blue">0</div></div>
+                <div class="metric-card"><div class="metric-title">Success</div><div id="m-success" class="metric-value text-green">0</div></div>
+                <div class="metric-card"><div class="metric-title">Lost</div><div id="m-lost" class="metric-value text-red">0</div></div>
+                <div class="metric-card"><div class="metric-title">Avg RTT</div><div id="m-rtt" class="metric-value text-yellow">0ms</div></div>
+                <div class="metric-card"><div class="metric-title">Avg Jitter</div><div id="m-jitter" class="metric-value text-purple">0ms</div></div>
+                <div class="metric-card"><div class="metric-title">Data (KB)</div><div id="m-data" class="metric-value text-white">0.0</div></div>
+            </div>
         </div>
     </div>
 
@@ -138,11 +247,20 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
+        // --- UI Interactions ---
+        const toggleBtn = document.getElementById('dashboard-toggle');
+        const dashContent = document.getElementById('dashboard-content');
+        const toggleIcon = document.getElementById('toggle-icon');
+
+        toggleBtn.addEventListener('click', () => {
+            dashContent.classList.toggle('collapsed');
+            toggleIcon.classList.toggle('up');
+        });
+
         // --- 1. Scene Setup & Theming ---
         const container = document.getElementById('canvas-container');
         const uiLayer = document.getElementById('ui-layer');
         const scene = new THREE.Scene();
-        // Slightly reduced fog density so objects retain true color better in light mode
         scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
         
         const width = window.innerWidth || document.documentElement.clientWidth || 800;
@@ -169,15 +287,14 @@
         dirLight.castShadow = true;
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 50;
-        dirLight.shadow.camera.left = -20;
-        dirLight.shadow.camera.right = 20;
-        dirLight.shadow.camera.top = 20;
-        dirLight.shadow.camera.bottom = -20;
+        dirLight.shadow.camera.left = -30;
+        dirLight.shadow.camera.right = 30;
+        dirLight.shadow.camera.top = 30;
+        dirLight.shadow.camera.bottom = -30;
+        dirLight.shadow.camera.far = 100;
         scene.add(dirLight);
 
-        let grid = new THREE.GridHelper(60, 60, 0xE8ECF1, 0xE8ECF1);
+        let grid = new THREE.GridHelper(60, 60, 0xD8DFE7, 0xD8DFE7);
         grid.position.y = -0.1;
         scene.add(grid);
 
@@ -209,8 +326,7 @@
         const ispGeo = new THREE.CylinderGeometry(1.2, 1.2, 3, 32); 
         const ispMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.2 });
         const ispServer = new THREE.Mesh(ispGeo, ispMat);
-        ispServer.castShadow = true;
-        ispServer.receiveShadow = true;
+        ispServer.castShadow = true; ispServer.receiveShadow = true;
         ispGroup.add(ispServer);
 
         const ringGeo = new THREE.TorusGeometry(1.25, 0.05, 16, 32);
@@ -223,33 +339,30 @@
         }
         ispGroup.position.copy(ispPos);
         scene.add(ispGroup);
-        createHTMLLabel('ISP Cloud Node', '', 2.5, ispGroup);
+        createHTMLLabel('ISP Infra', '', 2.5, ispGroup);
 
         const mainGroup = new THREE.Group();
         const mainGeo = new THREE.BoxGeometry(2, 3, 2); 
         const mainMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.3 });
         const mainServer = new THREE.Mesh(mainGeo, mainMat);
-        mainServer.castShadow = true;
-        mainServer.receiveShadow = true;
+        mainServer.castShadow = true; mainServer.receiveShadow = true;
         mainGroup.add(mainServer);
 
         for(let i = -1; i <= 1; i += 0.5) {
             const slot = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.3, 2.1), new THREE.MeshStandardMaterial({color: 0x0f766e, metalness: 0.6, roughness: 0.2}));
-            slot.position.y = i;
-            slot.castShadow = true;
+            slot.position.y = i; slot.castShadow = true;
             mainGroup.add(slot);
-            
             const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.05), new THREE.MeshBasicMaterial({color: 0x4ade80}));
             light.position.set(0.6, i, 1.05);
             mainGroup.add(light);
         }
         mainGroup.position.copy(mainPos);
         scene.add(mainGroup);
-        createHTMLLabel('Main Server', '', 2.5, mainGroup);
+        createHTMLLabel('Central Server', '', 2.5, mainGroup);
 
         const wanGeo = new THREE.BufferGeometry().setFromPoints([ispPos, mainPos]);
-        const wanMatDark = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
-        const wanMatLight = new THREE.LineDashedMaterial({ color: 0x475569, linewidth: 4, dashSize: 0.4, gapSize: 0.2 });
+        const wanMatDark = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const wanMatLight = new THREE.LineDashedMaterial({ color: 0x000000, linewidth: 4, dashSize: 0.4, gapSize: 0.2 });
         const wanLine = new THREE.Line(wanGeo, wanMatDark);
         wanLine.computeLineDistances(); 
         scene.add(wanLine);
@@ -260,20 +373,18 @@
             
             if(theme === 'dark') { 
                 scene.fog.color.setHex(0x0f172a); 
-                grid.material.color.setHex(0x1e293b); 
                 wanLine.material = wanMatDark;
             } 
             else if(theme === 'light') { 
                 scene.fog.color.setHex(0xf1f5f9); 
-                grid.material.color.setHex(0xE8ECF1); // Made significantly lighter
                 wanLine.material = wanMatLight;
             }
             
             packets.forEach(p => {
                 if(p.active && p.direction === 1) { 
                     const isLight = theme === 'light';
-                    p.coreMat.color.setHex(isLight ? 0x052e16 : 0xffffff); // Darker Green Core
-                    p.glowMat.color.setHex(isLight ? 0x14532d : 0x38bdf8); // Darker Green Glow
+                    p.coreMat.color.setHex(isLight ? 0x052e16 : 0xffffff); 
+                    p.glowMat.color.setHex(isLight ? 0x14532d : 0x38bdf8); 
                 }
             });
         });
@@ -305,8 +416,7 @@
             const deptGeo = new THREE.BoxGeometry(2, 3, 2);
             const deptMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.4, metalness: 0.9, roughness: 0.1 });
             const deptServer = new THREE.Mesh(deptGeo, deptMat);
-            deptServer.castShadow = true;
-            deptServer.receiveShadow = true;
+            deptServer.castShadow = true; deptServer.receiveShadow = true;
             deptGroup.add(deptServer);
 
             const edges = new THREE.EdgesGeometry(deptGeo);
@@ -317,7 +427,6 @@
             const agentMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, metalness: 0.3, roughness: 0.2, emissive: 0x4c1d95, emissiveIntensity: 0.5 });
             const virtualAgent = new THREE.Mesh(agentGeo, agentMat);
             deptGroup.add(virtualAgent);
-
             scene.add(deptGroup);
 
             const pcPositions = [ [-10, 0, zOffset+2], [-11, 0, zOffset-1], [-9, 0, zOffset-2] ];
@@ -325,23 +434,17 @@
                 const pcGroup = new THREE.Group();
                 pcGroup.position.set(pos[0], pos[1], pos[2]);
 
-                // Scaled computers up slightly
                 const screen = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.65, 0.12), new THREE.MeshStandardMaterial({color: 0x1e293b, metalness: 0.5, roughness: 0.5}));
-                screen.position.y = 0.6;
-                screen.castShadow = true;
-                
+                screen.position.y = 0.6; screen.castShadow = true;
                 const display = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.60), new THREE.MeshBasicMaterial({color: 0x0ea5e9}));
                 display.position.set(0, 0.6, 0.061);
-                
                 const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.25), new THREE.MeshStandardMaterial({color: 0x94a3b8, metalness: 0.8}));
-                stand.position.y = 0.18;
-                stand.castShadow = true;
-
+                stand.position.y = 0.18; stand.castShadow = true;
                 const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.35), new THREE.MeshStandardMaterial({color: 0x94a3b8, metalness: 0.8}));
-                base.position.y = 0.03;
-                base.castShadow = true;
+                base.position.y = 0.03; base.castShadow = true;
 
                 pcGroup.add(screen, display, stand, base);
+                pcGroup.scale.set(1.5, 1.5, 1.5);
                 scene.add(pcGroup);
                 
                 const lanGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(pos[0], 0.05, pos[2]), new THREE.Vector3(deptPos.x, 0.05, deptPos.z)]);
@@ -354,19 +457,17 @@
             const illTubeGeo = new THREE.TubeGeometry(straightPath, 20, 0.15, 8, false);
             const tex = createILLTexture();
             const illTube = new THREE.Mesh(illTubeGeo, new THREE.MeshBasicMaterial({ map: tex, color: 0x3b82f6, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
-            illTube.position.copy(deptPos);
-            illTube.lookAt(ispPos);
+            illTube.position.copy(deptPos); illTube.lookAt(ispPos);
             scene.add(illTube);
 
             const illOuterGeo = new THREE.TubeGeometry(straightPath, 20, 0.22, 6, false);
             const illOuterTube = new THREE.Mesh(illOuterGeo, new THREE.MeshBasicMaterial({ color: 0x1e3a8a, wireframe: true, transparent: true, opacity: 0.3 }));
-            illOuterTube.position.copy(deptPos);
-            illOuterTube.lookAt(ispPos);
+            illOuterTube.position.copy(deptPos); illOuterTube.lookAt(ispPos);
             scene.add(illOuterTube);
 
             const illMidpoint = new THREE.Vector3().lerpVectors(deptPos, ispPos, 0.5);
             createHTMLLabel(`Dept ${index+1}`, '', 2.5, deptGroup);
-            const agentLabelEl = createHTMLLabel(`SLA Agent ${index+1}`, 'agent-label', 1.5, deptGroup);
+            const agentLabelEl = createHTMLLabel(`Virtual Agent ${index+1}`, 'agent-label', 1.5, deptGroup);
             
             const illDummy = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1));
             illDummy.position.copy(illMidpoint);
@@ -382,21 +483,56 @@
         addDepartmentNode();
         document.getElementById('btn-add-dept').addEventListener('click', () => { if(departments.length < 5) addDepartmentNode(); });
 
-        // --- 3. UI & Metrics ---
-        let metrics = { sent: 0, success: 0, lost: 0, totalRTT: 0 };
+        // --- 3. UI, Metrics & Controls ---
+        let metrics = { sent: 0, success: 0, lost: 0, totalRTT: 0, lastRTT: 0, totalJitter: 0, totalBytes: 0 };
+        
         const ui = {
             latency: document.getElementById('latency-slider'), loss: document.getElementById('loss-slider'),
+            jitter: document.getElementById('jitter-slider'), load: document.getElementById('load-slider'), size: document.getElementById('size-slider'),
             latVal: document.getElementById('latency-val'), lossVal: document.getElementById('loss-val'),
+            jitterVal: document.getElementById('jitter-val'), loadVal: document.getElementById('load-val'), sizeVal: document.getElementById('size-val'),
             sent: document.getElementById('m-sent'), success: document.getElementById('m-success'),
-            lost: document.getElementById('m-lost'), rtt: document.getElementById('m-rtt')
+            lost: document.getElementById('m-lost'), rtt: document.getElementById('m-rtt'),
+            jitterMetric: document.getElementById('m-jitter'), dataMetric: document.getElementById('m-data')
         };
+        
         ui.latency.addEventListener('input', e => ui.latVal.innerText = e.target.value + 'ms');
         ui.loss.addEventListener('input', e => ui.lossVal.innerText = e.target.value + '%');
+        ui.jitter.addEventListener('input', e => ui.jitterVal.innerText = e.target.value + 'ms');
+        ui.load.addEventListener('input', e => ui.loadVal.innerText = e.target.value + '%');
+        ui.size.addEventListener('input', e => ui.sizeVal.innerText = e.target.value + 'B');
 
         function updateMetrics() {
-            ui.sent.innerText = metrics.sent; ui.success.innerText = metrics.success; ui.lost.innerText = metrics.lost;
+            ui.sent.innerText = metrics.sent; 
+            ui.success.innerText = metrics.success; 
+            ui.lost.innerText = metrics.lost;
             ui.rtt.innerText = (metrics.success > 0 ? Math.round(metrics.totalRTT / metrics.success) : 0) + 'ms';
+            ui.jitterMetric.innerText = (metrics.success > 1 ? Math.round(metrics.totalJitter / metrics.success) : 0) + 'ms';
+            ui.dataMetric.innerText = (metrics.totalBytes / 1024).toFixed(1);
         }
+
+        // --- Auto Ping Logic ---
+        let autoPingInterval;
+        document.getElementById('auto-ping').addEventListener('change', (e) => {
+            if(e.target.checked) {
+                const runAutoPing = () => {
+                    if(!e.target.checked) return;
+                    const loadFactor = parseInt(ui.load.value) / 100;
+                    const numPackets = Math.max(1, Math.ceil(loadFactor * 3));
+                    
+                    for(let i=0; i<numPackets; i++) {
+                        const randomDept = departments[Math.floor(Math.random() * departments.length)];
+                        if(randomDept) packets.push(new Packet(randomDept.index));
+                    }
+                    
+                    const nextInterval = Math.max(150, 1500 - (loadFactor * 1200));
+                    autoPingInterval = setTimeout(runAutoPing, nextInterval);
+                };
+                runAutoPing();
+            } else {
+                clearTimeout(autoPingInterval);
+            }
+        });
 
         // --- 4. Packet Logic ---
         const packets = [];
@@ -407,11 +543,10 @@
             constructor(deptIndex) {
                 this.deptIndex = deptIndex;
                 const startPos = departments[deptIndex].pos;
+                this.bytes = parseInt(ui.size.value);
 
                 this.mesh = new THREE.Group();
                 const isLight = document.body.classList.contains('theme-light');
-                
-                // Set initial colors, darker green for light mode
                 const coreColor = isLight ? 0x052e16 : 0xffffff;
                 const glowColor = isLight ? 0x14532d : 0x38bdf8;
 
@@ -423,12 +558,22 @@
                 
                 this.mesh.add(core); this.mesh.add(glow);
 
+                const sizeScale = (this.bytes / 512) * 0.7 + 0.3;
+                this.mesh.scale.set(sizeScale, sizeScale, sizeScale);
+
                 this.path = [startPos, ispPos, mainPos];
                 this.currentNode = 0; 
                 this.direction = 1; 
                 this.progress = 0;
                 this.active = true;
                 
+                const loadFactor = parseInt(ui.load.value) / 100;
+                const jitterRange = parseInt(ui.jitter.value);
+                const randomJitter = (Math.random() - 0.5) * 2 * jitterRange;
+                
+                const congestionDelay = loadFactor > 0.7 ? (loadFactor * 100) : 0; 
+                this.packetLatency = Math.max(10, parseInt(ui.latency.value) + randomJitter + congestionDelay);
+
                 this.mesh.position.copy(startPos);
                 scene.add(this.mesh);
                 metrics.sent++; updateMetrics();
@@ -437,8 +582,7 @@
             update(delta) {
                 if (!this.active) return;
                 
-                const latencyMs = parseInt(ui.latency.value);
-                const speed = 2.0 / (latencyMs / 100); 
+                const speed = 2.0 / (this.packetLatency / 100); 
                 this.progress += speed * delta;
                 this.mesh.children[1].scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
 
@@ -446,8 +590,12 @@
                     this.progress = 0;
                     this.currentNode += this.direction;
 
-                    const lossProb = parseInt(ui.loss.value) / 100;
-                    if (Math.random() < lossProb) {
+                    const loadFactor = parseInt(ui.load.value) / 100;
+                    const baseLoss = parseInt(ui.loss.value) / 100;
+                    const loadLoss = loadFactor > 0.85 ? 0.15 : 0; 
+                    const effectiveLossProb = baseLoss + loadLoss;
+
+                    if (Math.random() < effectiveLossProb) {
                         if ((this.direction === 1 && this.currentNode === 1) || (this.direction === -1 && this.currentNode === 0)) {
                             this.drop(); return;
                         }
@@ -464,7 +612,6 @@
                 if (this.active) {
                     const p1 = this.path[this.currentNode];
                     const p2 = this.path[this.currentNode + this.direction];
-                    
                     this.mesh.position.lerpVectors(p1, p2, this.progress);
                     
                     if ((this.currentNode === 1 && this.direction === 1) || (this.currentNode === 2 && this.direction === -1)) {
@@ -491,9 +638,19 @@
 
             success() {
                 this.active = false;
-                const baseLatency = parseInt(ui.latency.value) * 2;
-                metrics.totalRTT += (baseLatency + Math.floor(Math.random() * 20)); 
-                metrics.success++; updateMetrics();
+                
+                const rtt = this.packetLatency * 2;
+                metrics.totalRTT += rtt;
+                
+                if (metrics.success > 0) {
+                    const jitter = Math.abs(rtt - metrics.lastRTT);
+                    metrics.totalJitter += jitter;
+                }
+                metrics.lastRTT = rtt;
+                metrics.totalBytes += this.bytes;
+                metrics.success++; 
+                
+                updateMetrics();
                 scene.remove(this.mesh); 
                 this.coreMat.dispose(); this.glowMat.dispose();
             }
@@ -503,6 +660,7 @@
             departments.forEach((dept, i) => { setTimeout(() => { packets.push(new Packet(dept.index)); }, i * 200); });
         });
 
+        // --- 5. Interactions & Label Updates ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2(-9999, -9999); 
         window.addEventListener('mousemove', (e) => {
@@ -512,13 +670,10 @@
 
         function updateUIPositions() {
             camera.updateMatrixWorld(); 
-            
             uiLabels.forEach(label => {
                 if(label.isAgent) return; 
-                
                 const vector = new THREE.Vector3();
                 label.mesh.getWorldPosition(vector);
-                
                 vector.y += label.offset;
                 vector.project(camera);
                 
@@ -528,7 +683,6 @@
                     label.el.style.display = 'block';
                     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                     const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
-                    
                     if(!isNaN(x) && !isNaN(y)) {
                         label.el.style.left = `${x}px`;
                         label.el.style.top = `${y}px`;
@@ -570,7 +724,6 @@
                     dept.agentLabel.style.display = 'block';
                     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                     const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
-                    
                     if(!isNaN(x) && !isNaN(y)) {
                         dept.agentLabel.style.left = `${x}px`;
                         dept.agentLabel.style.top = `${y}px`;
