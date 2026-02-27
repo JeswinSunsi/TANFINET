@@ -1,7 +1,8 @@
+
 """
 TANFINET – ILL SLA Report Generator
 """
-
+import base64
 import calendar
 import os
 from datetime import datetime
@@ -65,10 +66,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Header ──────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="app-header">
-  <p class="app-title">TANFINET ILL SLA Report Generator</p>
-  <p class="app-subtitle">Tamil Nadu FibreNet Corporation — Bandwidth Performance Audit</p>
+# Helper function to read the local logo file
+def get_image_base64(image_path):
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception:
+        return "" # Returns empty if file isn't found so the app doesn't crash
+
+# Change 'logo1.png' to the actual name of your logo file in your folder
+logo_base64 = get_image_base64("logo3.png")
+
+st.markdown(f"""
+<div class="app-header" style="display: flex; align-items: center; justify-content: center; gap: 1.5rem;">
+  <img src="data:image/png;base64,{logo_base64}" style="width: 80px; height: auto; border-radius: 4px;">
+  <div>
+    <p class="app-title">TANFINET ILL SLA Report Generator</p>
+    <p class="app-subtitle">Tamil Nadu FibreNet Corporation — Bandwidth Performance Audit</p>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
