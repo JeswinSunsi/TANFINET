@@ -477,7 +477,7 @@
             <label>Max Avg RTT</label>
             <span class="sub-label">Upper limit for round-trip time</span>
             <div class="input-wrapper">
-                <input id="sla-rtt" type="number" min="1" max="2000" step="5" value="150">
+                <input id="sla-rtt" type="number" min="1" max="2000" step="5" value="200">
                 <span class="input-suffix">ms</span>
             </div>
         </div>
@@ -557,7 +557,7 @@
             <div class="mcard" id="card-rtt">
                 <div class="mcard-title">Avg Round-Trip Time</div>
                 <div class="mcard-value" id="val-rtt">—</div>
-                <div class="mcard-sla">Limit: <span id="lbl-sla-rtt">150</span> ms</div>
+                <div class="mcard-sla">Limit: <span id="lbl-sla-rtt">200</span> ms</div>
                 <div class="mcard-status" id="status-rtt">Standby</div>
             </div>
             <div class="mcard" id="card-jitter">
@@ -584,7 +584,7 @@
             <div class="chart-card">
                 <div class="chart-header">
                     <span class="chart-title">RTT (ms)</span>
-                    <span class="threshold-lbl" id="rtt-threshold-lbl">SLA ≤ 150ms</span>
+                    <span class="threshold-lbl" id="rtt-threshold-lbl">SLA ≤ 200ms</span>
                 </div>
                 <div class="chart-wrap"><canvas id="chart-rtt"></canvas></div>
             </div>
@@ -649,7 +649,7 @@ const slaInputs = {
 function getSLA() {
     return {
         maxLoss:    parseFloat(slaInputs.loss.value)    || 1,
-        maxRTT:     parseFloat(slaInputs.rtt.value)     || 150,
+        maxRTT:     parseFloat(slaInputs.rtt.value)     || 200,
         maxJitter:  parseFloat(slaInputs.jitter.value)  || 20,
         minSuccess: parseFloat(slaInputs.success.value) || 99,
         minBW:      parseFloat(slaInputs.bw.value)      || 10,
