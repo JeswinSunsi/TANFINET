@@ -20,43 +20,49 @@ st.set_page_config(
 # ── Minimalist CSS (Theme Adaptive) ─────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Clean, flat header adapting to light/dark mode */
+    /* Neutral warm-gray palette */
     .app-header {
-        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        border-bottom: 1px solid #c8c6c3;
         padding-bottom: 1.5rem;
         margin-bottom: 2rem;
-        margin-top: 1rem;
     }
     .app-title {
-        color: var(--text-color);
+        color: #2e2d2b;
         font-size: 1.75rem;
         font-weight: 600;
         margin: 0;
         letter-spacing: -0.025em;
     }
     .app-subtitle {
-        color: var(--text-color);
-        opacity: 0.7;
+        color: #5f5e5b;
         font-size: 0.95rem;
         margin-top: 0.25rem;
     }
     /* Subdued section headers */
     .section-title {
-        color: var(--text-color);
+        color: #3a3936;
         font-size: 1.1rem;
         font-weight: 600;
         margin-top: 2rem;
         margin-bottom: 1rem;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        border-bottom: 1px solid #c8c6c3;
         padding-bottom: 0.5rem;
     }
     /* Primary Action Button */
     .stButton > button[kind="primary"] {
-        background-color: var(--primary-color);
-        color: white;
+        background-color: #5b7fa6;
+        color: #ffffff;
         font-weight: 500;
         border-radius: 6px;
         padding: 0.5rem 1rem;
+        border: none;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #4a6d91;
+    }
+    /* Sidebar neutral tone */
+    section[data-testid="stSidebar"] {
+        background-color: #e0dedd;
     }
     /* Hide top padding for cleaner look */
     .block-container {
@@ -74,7 +80,8 @@ def get_image_base64(image_path):
     except Exception:
         return ""
 
-logo_base64 = get_image_base64("logo3.png")
+logo_base64 = get_image_base64("logo2.png")
+logo_base64_2 = get_image_base64("logo1.png")
 
 st.markdown(f"""
 <div class="app-header" style="
@@ -85,13 +92,15 @@ st.markdown(f"""
     gap: 1.5rem;
     width: 100%;
 ">
-  <img src="data:image/png;base64,{logo_base64}" 
-       style="width: 80px; height: auto; display: block;">
+  <img src="data:image/png;base64,{logo_base64_2}" 
+       style="width: 70px; height: auto; display: block;">
 
   <div style="display: flex; flex-direction: column; justify-content: center;">
-    <p class="app-title" style="margin: 0;">TANFINET ILL-SLA Audit Monitor</p>
+    <p class="app-title" style="margin: 0; font-size: 1.75rem; font-weight: 600;">TANFINET ILL-SLA Audit Monitor</p>
     <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation — Performance Audit</p>
   </div>
+    <img src="data:image/png;base64,{logo_base64}" 
+       style="width: 110px; height: auto; display: block;">
 </div>
 """, unsafe_allow_html=True)
 
@@ -111,9 +120,9 @@ rpt = _import_report()
 #  SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("<p style='font-size: 1.1rem; font-weight: 600; color: var(--text-color);'>Report Settings</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem; font-weight: 600; color: #2e2d2b;'>Report Settings</p>", unsafe_allow_html=True)
     
-    st.markdown("<p style='font-size: 0.85rem; font-weight: 600; color: var(--text-color); opacity: 0.7; margin-bottom: 0.5rem;'>PERIOD</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; font-weight: 600; color: #5f5e5b; margin-bottom: 0.5rem;'>PERIOD</p>", unsafe_allow_html=True)
     col_m, col_y = st.columns(2)
     with col_m:
         month_num = st.selectbox("Month", range(1, 13), index=2, format_func=lambda m: calendar.month_abbr[m], label_visibility="collapsed")
@@ -241,7 +250,7 @@ else:
 #  FOOTER
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown("""
-<div style='margin-top: 4rem; padding-top: 1rem; border-top: 1px solid rgba(128, 128, 128, 0.2); color: var(--text-color); opacity: 0.6; font-size: 0.8rem;'>
+<div style='margin-top: 4rem; padding-top: 1rem; border-top: 1px solid #c8c6c3; color: #888581; font-size: 0.8rem;'>
     For official use only. Tamil Nadu FibreNet Corporation.
 </div>
 """, unsafe_allow_html=True)
