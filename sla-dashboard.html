@@ -42,7 +42,6 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ─── SIDEBAR (Settings & Status) ────────────────────────── */
         aside {
             width: 320px;
             background: var(--bg-surface);
@@ -341,6 +340,14 @@
             padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s;
         }
         #btn-clear-log:hover { background: var(--bg-body); color: var(--text-main); }
+        #btn-download-log {
+            background: none; border: 1px solid var(--border-med);
+            font-size: 0.75rem; font-weight: 500; color: var(--text-muted);
+            padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 4px;
+        }
+        #btn-download-log:hover { background: var(--bg-body); border-color: var(--brand-blue); color: var(--brand-blue); }
+        #btn-download-log:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
         
         #violation-log {
             flex: 1; overflow-y: auto; max-height: 250px;
@@ -738,6 +745,10 @@
                     <span class="panel-title">SLA Violation Event Log</span>
                     <div class="vlog-controls">
                         <span id="vlog-count">0 Events</span>
+                        <button id="btn-download-log" title="Download violations as CSV" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            CSV
+                        </button>
                         <button id="btn-clear-log">Clear Logs</button>
                     </div>
                 </div>
@@ -851,6 +862,7 @@ emailEnabledEl.addEventListener('change', () => {
 // ─── Session Counters ────────────────────────────────────────────────────
 let violationCount = 0;
 const HISTORY_MAX  = 60; // data points shown on chart
+const violationData = []; // stores raw violation records for CSV export
 
 // ─── Violation Log ───────────────────────────────────────────────────────
 const vlogEl    = document.getElementById('violation-log');
@@ -860,10 +872,12 @@ const vlogCount = document.getElementById('vlog-count');
 function addViolation(title, desc, level = 'breach') {
     violationCount++;
     vlogEmpty.style.display = 'none';
+    const now = new Date();
+    violationData.unshift({ time: now.toTimeString().split(' ')[0], date: now.toLocaleDateString(), title, desc, level });
+    document.getElementById('btn-download-log').disabled = false;
     const entry = document.createElement('div');
     entry.className = `vlog-entry ${level}`;
     
-    const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
     
     const icon = level === 'warn' ? '⚠️' : '🚨';
@@ -883,8 +897,31 @@ document.getElementById('btn-clear-log').addEventListener('click', () => {
     vlogEl.appendChild(vlogEmpty);
     vlogEmpty.style.display = 'block';
     violationCount = 0;
+    violationData.length = 0;
     vlogCount.textContent = '0 Events';
     document.getElementById('info-viol').textContent = 0;
+    document.getElementById('btn-download-log').disabled = true;
+});
+
+document.getElementById('btn-download-log').addEventListener('click', () => {
+    const rows = [['Date', 'Time', 'Severity', 'Event', 'Description']];
+    violationData.forEach(v => {
+        rows.push([
+            v.date,
+            v.time,
+            v.level.toUpperCase(),
+            `"${v.title.replace(/"/g, '""')}"`,
+            `"${v.desc.replace(/"/g, '""')}"`
+        ]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `sla-violations-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 });
 
 // ─── Metric Card Updater ─────────────────────────────────────────────────
