@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D SLA Network Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #0f172a;
@@ -38,7 +41,7 @@
             --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
         }
         
-        body { margin: 0; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', sans-serif; transition: background-color 0.5s; }
+        body { margin: 0; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif; transition: background-color 0.5s; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5; overflow: hidden; }
 
@@ -182,6 +185,31 @@
         
         .chevron { transition: transform 0.3s; font-size: 0.8rem; }
         .chevron.up { transform: rotate(180deg); }
+
+        /* Speed selector styling */
+        .speed-select-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .speed-select-row label { font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; }
+        .speed-select-row select {
+            flex: 1; background: var(--metric-bg); color: var(--text-main);
+            border: 1px solid var(--border-color); border-radius: var(--radius-inner);
+            padding: 4px 6px; font-size: 0.85rem; cursor: pointer; outline: none;
+        }
+        .speed-select-row select option { color: #0f172a; }
+
+        /* Downtime banner */
+        #downtime-banner {
+            display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            width: auto; max-width: 360px; z-index: 50;
+            color: #fff; text-align: center; font-size: 0.82rem; font-weight: 700;
+            letter-spacing: 0.8px; padding: 1rem 1rem; pointer-events: none;
+            border-radius: 8px; border: 1px solid rgba(241, 174, 174, 0.6);
+ white-space: nowrap;
+            animation: blink-bg 1.2s infinite alternate;
+        }
+        @keyframes blink-bg {
+            from { background: rgba(185,28,28,0.65); }
+            to   { background: rgba(127,29,29,0.75); }
+        }
     </style>
 </head>
 <body>
@@ -195,7 +223,7 @@
 
     <div id="dashboard">
         <div class="dashboard-header" id="dashboard-toggle">
-            <span>Control Panel</span>
+            <span>CONTROL PANEL</span>
             <span class="chevron" id="toggle-icon">▼</span>
         </div>
         
@@ -220,14 +248,32 @@
                 <label>Payload Size <span id="size-val" class="value-display">512B</span></label>
                 <input type="range" id="size-slider" min="64" max="1500" value="512" step="64">
             </div>
+            <div class="control-group">
+                <label>Bandwidth <span id="bw-val" class="value-display">100 Mbps</span></label>
+                <input type="range" id="bw-slider" min="1" max="1000" value="100" step="1">
+            </div>
+
+            <div class="speed-select-row">
+                <label>Sim Speed</label>
+                <select id="speed-select">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="5">5x</option>
+                    <option value="10">10x</option>
+                </select>
+            </div>
 
             <div class="toggle-container">
                 <input type="checkbox" id="auto-ping">
                 <label for="auto-ping">Continuous Traffic</label>
             </div>
+            <div class="toggle-container" style="background: rgba(220,38,38,0.15); border: 1px solid rgba(248,113,113,0.3);">
+                <input type="checkbox" id="downtime-toggle">
+                <label for="downtime-toggle" style="color:#f87171;">Network Downtime</label>
+            </div>
 
             <button id="btn-send">Trigger Manual Burst</button>
-            <button id="btn-add-dept" class="secondary">+ Add Node</button>
+            <button id="btn-add-dept" class="secondary">+ Add ILL</button>
             
             <div class="metrics">
                 <div class="metric-card"><div class="metric-title">Sent</div><div id="m-sent" class="metric-value text-blue">0</div></div>
@@ -240,6 +286,7 @@
         </div>
     </div>
 
+    <div id="downtime-banner">Network Downtime Active — All Packets Dropped</div>
     <div id="canvas-container"></div>
     <div id="ui-layer"></div>
 
@@ -360,8 +407,19 @@
         scene.add(mainGroup);
         createHTMLLabel('Central Server', '', 2.5, mainGroup);
 
-        const wanGeo = new THREE.BufferGeometry().setFromPoints([ispPos, mainPos]);
-        const wanMatDark = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+const wanPoints = [];
+const curveSegments = 50;
+
+for (let i = 0; i <= curveSegments; i++) {
+    const t = i / curveSegments;
+    // Interpolate between ISP and Main Server
+    const pt = new THREE.Vector3().lerpVectors(ispPos, mainPos, t);
+    // Apply the exact same sine wave height as the packet animation (0.4 multiplier)
+    pt.y += Math.sin(t * Math.PI) * 0.4; 
+    wanPoints.push(pt);
+}
+
+const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const wanMatDark = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
         const wanMatLight = new THREE.LineDashedMaterial({ color: 0x000000, linewidth: 4, dashSize: 0.4, gapSize: 0.2 });
         const wanLine = new THREE.Line(wanGeo, wanMatDark);
         wanLine.computeLineDistances(); 
@@ -491,16 +549,28 @@
             jitter: document.getElementById('jitter-slider'), load: document.getElementById('load-slider'), size: document.getElementById('size-slider'),
             latVal: document.getElementById('latency-val'), lossVal: document.getElementById('loss-val'),
             jitterVal: document.getElementById('jitter-val'), loadVal: document.getElementById('load-val'), sizeVal: document.getElementById('size-val'),
+            bandwidth: document.getElementById('bw-slider'), bwVal: document.getElementById('bw-val'),
+            speedSelect: document.getElementById('speed-select'),
             sent: document.getElementById('m-sent'), success: document.getElementById('m-success'),
             lost: document.getElementById('m-lost'), rtt: document.getElementById('m-rtt'),
             jitterMetric: document.getElementById('m-jitter'), dataMetric: document.getElementById('m-data')
         };
+
+        let simSpeed = 1;
+        let downtimeActive = false;
+        const downtimeBanner = document.getElementById('downtime-banner');
         
         ui.latency.addEventListener('input', e => ui.latVal.innerText = e.target.value + 'ms');
         ui.loss.addEventListener('input', e => ui.lossVal.innerText = e.target.value + '%');
         ui.jitter.addEventListener('input', e => ui.jitterVal.innerText = e.target.value + 'ms');
         ui.load.addEventListener('input', e => ui.loadVal.innerText = e.target.value + '%');
         ui.size.addEventListener('input', e => ui.sizeVal.innerText = e.target.value + 'B');
+        ui.bandwidth.addEventListener('input', e => ui.bwVal.innerText = e.target.value + ' Mbps');
+        ui.speedSelect.addEventListener('change', e => { simSpeed = parseFloat(e.target.value); });
+        document.getElementById('downtime-toggle').addEventListener('change', e => {
+            downtimeActive = e.target.checked;
+            downtimeBanner.style.display = downtimeActive ? 'block' : 'none';
+        });
 
         function updateMetrics() {
             ui.sent.innerText = metrics.sent; 
@@ -518,14 +588,14 @@
                 const runAutoPing = () => {
                     if(!e.target.checked) return;
                     const loadFactor = parseInt(ui.load.value) / 100;
-                    const numPackets = Math.max(1, Math.ceil(loadFactor * 3));
+                    const numPackets = Math.max(1, Math.ceil(loadFactor * 3 * simSpeed));
                     
                     for(let i=0; i<numPackets; i++) {
                         const randomDept = departments[Math.floor(Math.random() * departments.length)];
                         if(randomDept) packets.push(new Packet(randomDept.index));
                     }
                     
-                    const nextInterval = Math.max(150, 1500 - (loadFactor * 1200));
+                    const nextInterval = Math.max(50, (1500 - (loadFactor * 1200)) / simSpeed);
                     autoPingInterval = setTimeout(runAutoPing, nextInterval);
                 };
                 runAutoPing();
@@ -544,6 +614,14 @@
                 this.deptIndex = deptIndex;
                 const startPos = departments[deptIndex].pos;
                 this.bytes = parseInt(ui.size.value);
+
+                // Drop immediately if downtime is active — count as sent + lost
+                if (downtimeActive) {
+                    metrics.sent++; metrics.lost++; updateMetrics();
+                    this.active = false;
+                    this.mesh = new THREE.Group();
+                    return;
+                }
 
                 this.mesh = new THREE.Group();
                 const isLight = document.body.classList.contains('theme-light');
@@ -582,7 +660,8 @@
             update(delta) {
                 if (!this.active) return;
                 
-                const speed = 2.0 / (this.packetLatency / 100); 
+                const bandwidthFactor = Math.max(0.01, parseInt(ui.bandwidth.value) / 100);
+                const speed = (2.0 / (this.packetLatency / 100)) * bandwidthFactor; 
                 this.progress += speed * delta;
                 this.mesh.children[1].scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
 
@@ -696,7 +775,8 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
+            const rawDelta = clock.getDelta();
+            const delta = rawDelta * simSpeed;
             const time = Date.now();
             controls.update();
             updateUIPositions();
