@@ -1026,7 +1026,11 @@ def build_report(
     rec_header = ["Ref", "Area", "Recommendation Detail"]
     rec_rows = [rec_header]
     for ref, area, desc in recs:
-        rec_rows.append([ref, area, desc])
+        rec_rows.append([
+            Paragraph(ref, ST["small_c"]),
+            Paragraph(area, ST["small"]),
+            Paragraph(desc, ST["small"]),
+        ])
     rec_col_w = [12*mm, 38*mm, CONTENT_W - 50*mm]
     rec_tbl = Table(rec_rows, colWidths=rec_col_w, repeatRows=1)
     rec_tbl.setStyle(make_ts())
