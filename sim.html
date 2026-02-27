@@ -31,19 +31,6 @@
             --label-border: #94a3b8;
         }
         
-        body.theme-cyber {
-            --bg-color: #050505;
-            --panel-bg: rgba(10, 10, 15, 0.85);
-            --text-main: #00ffcc;
-            --text-muted: #00ccaa;
-            --border-color: #00ffcc;
-            --metric-bg: rgba(0, 20, 20, 0.6);
-            --btn-bg: #ff0055;
-            --btn-hover: #cc0044;
-            --label-bg: rgba(0,20,20,0.8);
-            --label-border: #00ffcc;
-        }
-
         body { margin: 0; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', sans-serif; transition: background-color 0.5s; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         
@@ -80,7 +67,6 @@
         
         .metrics { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .metric-card { background: var(--metric-bg); padding: 10px; border-radius: 6px; text-align: center; border: 1px solid transparent; }
-        body.theme-cyber .metric-card { border-color: #003333; }
         .metric-value { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
         .text-green { color: #4ade80; } .text-red { color: #f87171; } .text-blue { color: #60a5fa; } .text-yellow { color: #facc15; }
         
@@ -105,7 +91,6 @@
         <select id="theme-select">
             <option value="dark">🌙 Dark Theme</option>
             <option value="light">☀️ Light Theme</option>
-            <option value="cyber">🤖 Cyberpunk</option>
         </select>
     </div>
 
@@ -148,36 +133,49 @@
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true; // Enable shadows
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.maxPolarAngle = Math.PI / 2 + 0.1;
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
+        
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 10, 5);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 50;
+        dirLight.shadow.camera.left = -20;
+        dirLight.shadow.camera.right = 20;
+        dirLight.shadow.camera.top = 20;
+        dirLight.shadow.camera.bottom = -20;
         scene.add(dirLight);
 
         let grid = new THREE.GridHelper(60, 60, 0x1e293b, 0x1e293b);
         grid.position.y = -0.1;
         scene.add(grid);
 
-        document.getElementById('theme-select').addEventListener('change', (e) => {
-            const theme = e.target.value;
-            document.body.className = `theme-${theme}`;
-            if(theme === 'dark') { scene.fog.color.setHex(0x0f172a); grid.material.color.setHex(0x1e293b); } 
-            else if(theme === 'light') { scene.fog.color.setHex(0xf1f5f9); grid.material.color.setHex(0xcbd5e1); } 
-            else if(theme === 'cyber') { scene.fog.color.setHex(0x050505); grid.material.color.setHex(0x003333); }
-        });
+        // Floor plane to catch shadows
+        const floorGeo = new THREE.PlaneGeometry(60, 60);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.3 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.11;
+        floor.receiveShadow = true;
+        scene.add(floor);
 
         // --- 2. Dynamic Architecture Generators ---
         const uiLabels = [];
         const departments = [];
         const illTextures = [];
         const ispPos = new THREE.Vector3(2, 1.5, 0);
-        const mainPos = new THREE.Vector3(9, 2, 0);
+        const mainPos = new THREE.Vector3(9, 1.5, 0); // Adjusted height matches ISP
 
         function createHTMLLabel(text, className, offset, mesh) {
             const el = document.createElement('div');
@@ -188,22 +186,86 @@
             return el;
         }
 
-        const ispGeo = new THREE.CylinderGeometry(1.2, 1.2, 3, 32);
-        const ispMat = new THREE.MeshPhongMaterial({ color: 0x64748b });
+        // --- ENHANCED ISP SERVER ---
+        const ispGroup = new THREE.Group();
+        const ispGeo = new THREE.CylinderGeometry(1.2, 1.2, 3, 32); // Height 3
+        const ispMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.2 });
         const ispServer = new THREE.Mesh(ispGeo, ispMat);
-        ispServer.position.copy(ispPos);
-        scene.add(ispServer);
-        createHTMLLabel('ISP Server', '', 2.5, ispServer);
+        ispServer.castShadow = true;
+        ispServer.receiveShadow = true;
+        ispGroup.add(ispServer);
 
-        const mainGeo = new THREE.BoxGeometry(2, 4, 2);
-        const mainMat = new THREE.MeshPhongMaterial({ color: 0x0f766e });
+        // Add glowing telemetry rings
+        const ringGeo = new THREE.TorusGeometry(1.25, 0.05, 16, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        for(let i = -1; i <= 1; i += 1) {
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.y = i * 0.8;
+            ring.rotation.x = Math.PI / 2;
+            ispGroup.add(ring);
+        }
+        ispGroup.position.copy(ispPos);
+        scene.add(ispGroup);
+        createHTMLLabel('ISP Cloud Node', '', 2.5, ispGroup);
+
+        // --- ENHANCED MAIN SERVER (Rack) ---
+        const mainGroup = new THREE.Group();
+        const mainGeo = new THREE.BoxGeometry(2, 3, 2); // Height scaled down to 3 to match others
+        const mainMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.3 });
         const mainServer = new THREE.Mesh(mainGeo, mainMat);
-        mainServer.position.copy(mainPos);
-        scene.add(mainServer);
-        createHTMLLabel('Main Server', '', 3, mainServer);
+        mainServer.castShadow = true;
+        mainServer.receiveShadow = true;
+        mainGroup.add(mainServer);
 
+        // Rack server blades (adjusted range to fit inside height 3)
+        for(let i = -1; i <= 1; i += 0.5) {
+            const slot = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.3, 2.1), new THREE.MeshStandardMaterial({color: 0x0f766e, metalness: 0.6, roughness: 0.2}));
+            slot.position.y = i;
+            slot.castShadow = true;
+            mainGroup.add(slot);
+            
+            // Blinking status indicator
+            const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.05), new THREE.MeshBasicMaterial({color: 0x4ade80}));
+            light.position.set(0.6, i, 1.05);
+            mainGroup.add(light);
+        }
+        mainGroup.position.copy(mainPos);
+        scene.add(mainGroup);
+        createHTMLLabel('Main Server', '', 2.5, mainGroup);
+
+        // WAN Line Setup (Dynamic for Theme Switching)
         const wanGeo = new THREE.BufferGeometry().setFromPoints([ispPos, mainPos]);
-        scene.add(new THREE.Line(wanGeo, new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 })));
+        wanGeo.computeLineDistances(); // Compute needed for dashes
+        const wanMatDark = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
+        const wanMatLight = new THREE.LineDashedMaterial({ color: 0x475569, linewidth: 4, dashSize: 0.4, gapSize: 0.2 });
+        const wanLine = new THREE.Line(wanGeo, wanMatDark);
+        scene.add(wanLine);
+
+        // Handle Theme Switching
+        document.getElementById('theme-select').addEventListener('change', (e) => {
+            const theme = e.target.value;
+            document.body.className = `theme-${theme}`;
+            
+            if(theme === 'dark') { 
+                scene.fog.color.setHex(0x0f172a); 
+                grid.material.color.setHex(0x1e293b); 
+                wanLine.material = wanMatDark;
+            } 
+            else if(theme === 'light') { 
+                scene.fog.color.setHex(0xf1f5f9); 
+                grid.material.color.setHex(0xe2e8f0); // Lighter gray grid
+                wanLine.material = wanMatLight; // Thicker dashed line
+            }
+            
+            // Re-color existing outbound packets seamlessly
+            packets.forEach(p => {
+                if(p.active && p.direction === 1) { 
+                    const isLight = theme === 'light';
+                    p.coreMat.color.setHex(isLight ? 0x22c55e : 0xffffff);
+                    p.glowMat.color.setHex(isLight ? 0x166534 : 0x38bdf8);
+                }
+            });
+        });
 
         function createILLTexture() {
             const canvas = document.createElement('canvas');
@@ -226,28 +288,64 @@
             const zOffset = index === 0 ? 0 : (index % 2 !== 0 ? Math.ceil(index/2) * -7 : Math.ceil(index/2) * 7);
             const deptPos = new THREE.Vector3(-6, 1.5, zOffset);
 
-            const deptGeo = new THREE.BoxGeometry(2, 3, 2);
-            const deptMat = new THREE.MeshPhongMaterial({ color: 0x2563eb, transparent: true, opacity: 1.0 });
+            const deptGroup = new THREE.Group();
+            deptGroup.position.copy(deptPos);
+
+            // --- ENHANCED DEPARTMENT SERVER (Glass Casing) ---
+            const deptGeo = new THREE.BoxGeometry(2, 3, 2); // Height 3
+            const deptMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.4, metalness: 0.9, roughness: 0.1 });
             const deptServer = new THREE.Mesh(deptGeo, deptMat);
-            deptServer.position.copy(deptPos);
-            scene.add(deptServer);
+            deptServer.castShadow = true;
+            deptServer.receiveShadow = true;
+            deptGroup.add(deptServer);
 
-            const agentGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-            const agentMat = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
+            // Wireframe Chassis
+            const edges = new THREE.EdgesGeometry(deptGeo);
+            const chassis = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 }));
+            deptGroup.add(chassis);
+
+            // --- ENHANCED VIRTUAL AGENT ---
+            const agentGeo = new THREE.OctahedronGeometry(0.5);
+            const agentMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, metalness: 0.3, roughness: 0.2, emissive: 0x4c1d95, emissiveIntensity: 0.5 });
             const virtualAgent = new THREE.Mesh(agentGeo, agentMat);
-            deptServer.add(virtualAgent);
+            deptGroup.add(virtualAgent);
 
-            const pcGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-            const pcMat = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
-            const pcPositions = [ [-10, 0.4, zOffset+2], [-11, 0.4, zOffset-1], [-9, 0.4, zOffset-2] ];
+            scene.add(deptGroup);
+
+            // --- ENHANCED PCs (Monitors) ---
+            const pcPositions = [ [-10, 0, zOffset+2], [-11, 0, zOffset-1], [-9, 0, zOffset-2] ];
             pcPositions.forEach(pos => {
-                const pc = new THREE.Mesh(pcGeo, pcMat);
-                pc.position.set(pos[0], pos[1], pos[2]);
-                scene.add(pc);
-                const lanGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(pos[0], pos[1], pos[2]), new THREE.Vector3(deptPos.x, 0.5, deptPos.z)]);
+                const pcGroup = new THREE.Group();
+                pcGroup.position.set(pos[0], pos[1], pos[2]);
+
+                // Screen casing
+                const screen = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.1), new THREE.MeshStandardMaterial({color: 0x1e293b, metalness: 0.5, roughness: 0.5}));
+                screen.position.y = 0.5;
+                screen.castShadow = true;
+                
+                // Display glowing panel
+                const display = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.45), new THREE.MeshBasicMaterial({color: 0x0ea5e9}));
+                display.position.set(0, 0.5, 0.051);
+                
+                // Monitor Stand
+                const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2), new THREE.MeshStandardMaterial({color: 0x94a3b8, metalness: 0.8}));
+                stand.position.y = 0.15;
+                stand.castShadow = true;
+
+                // Base
+                const base = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.3), new THREE.MeshStandardMaterial({color: 0x94a3b8, metalness: 0.8}));
+                base.position.y = 0.025;
+                base.castShadow = true;
+
+                pcGroup.add(screen, display, stand, base);
+                scene.add(pcGroup);
+                
+                // LAN line
+                const lanGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(pos[0], 0.05, pos[2]), new THREE.Vector3(deptPos.x, 0.05, deptPos.z)]);
                 scene.add(new THREE.Line(lanGeo, new THREE.LineBasicMaterial({ color: 0x334155 })));
             });
 
+            // Links (Tubes)
             const distance = deptPos.distanceTo(ispPos);
             const straightPath = new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, distance));
 
@@ -265,14 +363,24 @@
             scene.add(illOuterTube);
 
             const illMidpoint = new THREE.Vector3().lerpVectors(deptPos, ispPos, 0.5);
-            createHTMLLabel(`Dept ${index+1}`, '', 2.5, deptServer);
-            const agentLabelEl = createHTMLLabel(`SLA Agent ${index+1}`, 'agent-label', 1.5, virtualAgent);
+            createHTMLLabel(`Dept ${index+1}`, '', 2.5, deptGroup);
+            const agentLabelEl = createHTMLLabel(`SLA Agent ${index+1}`, 'agent-label', 1.5, deptGroup);
             
             const illDummy = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1));
             illDummy.position.copy(illMidpoint);
             createHTMLLabel('ILL', 'ill-label', 0.8, illDummy);
 
-            departments.push({ index, mesh: deptServer, agent: virtualAgent, mat: deptMat, pos: deptPos, agentLabel: agentLabelEl, outerTube: illOuterTube });
+            // Store references
+            departments.push({ 
+                index, 
+                group: deptGroup, 
+                mesh: deptServer,
+                agent: virtualAgent, 
+                mat: deptMat, 
+                pos: deptPos, 
+                agentLabel: agentLabelEl, 
+                outerTube: illOuterTube 
+            });
         }
 
         addDepartmentNode();
@@ -305,10 +413,18 @@
                 const startPos = departments[deptIndex].pos;
 
                 this.mesh = new THREE.Group();
-                this.coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
+                
+                // Set initial colors dynamically based on the current theme
+                const isLight = document.body.classList.contains('theme-light');
+                const coreColor = isLight ? 0x22c55e : 0xffffff;
+                const glowColor = isLight ? 0x166534 : 0x38bdf8;
+
+                this.coreMat = new THREE.MeshBasicMaterial({ color: coreColor }); 
                 const core = new THREE.Mesh(packetGeo, this.coreMat);
-                this.glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+                
+                this.glowMat = new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
                 const glow = new THREE.Mesh(glowGeo, this.glowMat);
+                
                 this.mesh.add(core); this.mesh.add(glow);
 
                 // Nodes: 0 = Dept, 1 = ISP, 2 = Main
@@ -336,7 +452,7 @@
                     this.progress = 0;
                     this.currentNode += this.direction;
 
-                    // Loss condition: Only triggered when completing the hop between Dept(0) and ISP(1)
+                    // Loss condition
                     const lossProb = parseInt(ui.loss.value) / 100;
                     if (Math.random() < lossProb) {
                         if ((this.direction === 1 && this.currentNode === 1) || (this.direction === -1 && this.currentNode === 0)) {
@@ -344,23 +460,21 @@
                         }
                     }
 
-                    // Turnaround logic at the far ends
+                    // Turnaround logic
                     if (this.currentNode === 2 && this.direction === 1) {
-                        this.direction = -1; // Bounce back
-                        this.glowMat.color.setHex(0x4ade80); // Turn green
+                        this.direction = -1; 
+                        this.glowMat.color.setHex(0x4ade80); // Turn bright green on successful bounce
                     } else if (this.currentNode === 0 && this.direction === -1) {
-                        this.success(); return; // Made it back home
+                        this.success(); return; 
                     }
                 }
                 
-                // Safe interpolation using clean node indices
                 if (this.active) {
                     const p1 = this.path[this.currentNode];
                     const p2 = this.path[this.currentNode + this.direction];
                     
                     this.mesh.position.lerpVectors(p1, p2, this.progress);
                     
-                    // Add arc bounce ONLY on the standard WAN hop (between ISP [1] and Main [2])
                     if ((this.currentNode === 1 && this.direction === 1) || (this.currentNode === 2 && this.direction === -1)) {
                         this.mesh.position.y += Math.sin(this.progress * Math.PI) * 0.4; 
                     }
@@ -393,13 +507,13 @@
             }
         }
 
-document.getElementById('btn-send').addEventListener('click', () => {
-    departments.forEach((dept, i) => {
-        setTimeout(() => {
-            packets.push(new Packet(dept.index));
-        }, i * 200); // 200ms stagger delay per department
-    });
-});
+        document.getElementById('btn-send').addEventListener('click', () => {
+            departments.forEach((dept, i) => {
+                setTimeout(() => {
+                    packets.push(new Packet(dept.index));
+                }, i * 200); 
+            });
+        });
 
         // --- 5. Mouse Interaction ---
         const raycaster = new THREE.Raycaster();
@@ -438,6 +552,7 @@ document.getElementById('btn-send').addEventListener('click', () => {
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
+            const time = Date.now();
             controls.update();
             updateUIPositions();
 
@@ -445,16 +560,19 @@ document.getElementById('btn-send').addEventListener('click', () => {
             
             departments.forEach(dept => {
                 dept.outerTube.rotateZ(0.5 * delta); 
-                dept.agent.scale.setScalar(1 + Math.sin(Date.now() * 0.005) * 0.1); 
+                dept.agent.scale.setScalar(1 + Math.sin(time * 0.005) * 0.1); 
+                dept.agent.position.y = Math.sin(time * 0.003) * 0.2;
+                dept.agent.rotation.y += 1 * delta;
+                dept.agent.rotation.z += 0.5 * delta;
             });
 
             raycaster.setFromCamera(mouse, camera);
             departments.forEach(dept => {
                 const intersects = raycaster.intersectObject(dept.mesh);
                 if (intersects.length > 0) {
-                    dept.mat.opacity = 0.3; 
+                    dept.mat.opacity = 0.1; 
                     const vector = new THREE.Vector3();
-                    dept.agent.getWorldPosition(vector);
+                    dept.group.getWorldPosition(vector);
                     vector.y += 1.5; 
                     vector.project(camera);
                     
@@ -462,7 +580,7 @@ document.getElementById('btn-send').addEventListener('click', () => {
                     dept.agentLabel.style.left = `${(vector.x * .5 + .5) * window.innerWidth}px`;
                     dept.agentLabel.style.top = `${(vector.y * -.5 + .5) * window.innerHeight}px`;
                 } else {
-                    dept.mat.opacity = 1.0;
+                    dept.mat.opacity = 0.4;
                     dept.agentLabel.style.display = 'none';
                 }
             });
