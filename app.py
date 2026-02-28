@@ -4,6 +4,7 @@ TANFINET – ILL SLA Report Generator
 """
 import base64
 import calendar
+import io
 import os
 from datetime import datetime
 
@@ -135,7 +136,9 @@ with st.sidebar:
     st.write("")
     with st.expander("Advanced Configuration"):
         random_seed = st.number_input("Random Seed", min_value=0, max_value=9999, value=42, step=1)
-        output_fname = st.text_input("Output Filename", value=f"TANFINET_ILL_SLA_{year_val}_{month_num:02d}.pdf")
+        report_format = st.radio("Export Format", ["PDF", "Excel"], horizontal=True)
+        _ext = "pdf" if report_format == "PDF" else "xlsx"
+        output_fname = st.text_input("Output Filename", value=f"TANFINET_ILL_SLA_{year_val}_{month_num:02d}.{_ext}")
 
     st.write("")
     st.markdown("<p style='font-size: 0.85rem; font-weight: 600; color: #5f5e5b; margin-bottom: 0.25rem;'>SLA DOCUMENT UPLOAD</p>", unsafe_allow_html=True)
@@ -214,6 +217,121 @@ m2.metric("Reporting Period", report_period)
 m3.metric("Total Contracted BW", f"{int(selected['Capacity (Mbps)'].sum()):,} Mbps" if n_sel else "—")
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  EXCEL REPORT BUILDER
+# ═══════════════════════════════════════════════════════════════════════════
+
+def build_excel_report(departments, report_period, report_month_start, random_seed=42):
+    """Build an Excel workbook with Summary, Daily Bandwidth, and Outages sheets."""
+    import calendar as cal
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    dept_rows, total, compliant, breach, overall = rpt.prepare_data(
+        departments, report_month_start, random_seed=random_seed
+    )
+    num_days = cal.monthrange(report_month_start.year, report_month_start.month)[1]
+
+    wb = openpyxl.Workbook()
+
+    # ── Shared styles ────────────────────────────────────────────────────
+    hdr_fill   = PatternFill("solid", fgColor="0B2447")
+    hdr_font   = Font(bold=True, color="FFFFFF", size=10)
+    title_font = Font(bold=True, size=13, color="0B2447")
+    ok_fill    = PatternFill("solid", fgColor="D5F5E3")
+    fail_fill  = PatternFill("solid", fgColor="FADBD8")
+    ok_font    = Font(bold=True, color="1E8449", size=9)
+    fail_font  = Font(bold=True, color="C0392B", size=9)
+    center     = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left       = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+    thin       = Side(style="thin", color="CDD5E0")
+    border     = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def set_header_row(ws, row_num, cols):
+        for ci, val in enumerate(cols, 1):
+            c = ws.cell(row=row_num, column=ci, value=val)
+            c.fill, c.font, c.alignment, c.border = hdr_fill, hdr_font, center, border
+
+    # ── Sheet 1: Summary ─────────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Summary"
+    ws1.row_dimensions[1].height = 22
+    ws1.row_dimensions[2].height = 14
+
+    ws1["A1"] = f"TANFINET ILL-SLA Compliance Report — {report_period}"
+    ws1["A1"].font = title_font
+    ws1["A1"].alignment = left
+    ws1.merge_cells("A1:J1")
+
+    ws1["A2"] = f"Generated: {datetime.now().strftime('%d %b %Y, %H:%M')}"
+    ws1["A2"].font = Font(italic=True, size=9, color="888581")
+    ws1.merge_cells("A2:J2")
+
+    # KPI summary row
+    kpi_labels = ["Total Depts", str(total), "Compliant", str(compliant),
+                  "Breach", str(breach), "Overall Uptime", f"{overall:.3f}%", "", ""]
+    for ci, val in enumerate(kpi_labels, 1):
+        c = ws1.cell(row=4, column=ci, value=val)
+        c.font = Font(bold=(ci % 2 == 1), size=9, color="0B2447" if ci % 2 == 1 else "000000")
+        c.alignment = center
+
+    # Department compliance table
+    tbl_headers = ["Department", "Circuit ID", "Capacity (Mbps)", "SLA Target (%)",
+                   "Achieved (%)", "Status", "Avg BW (Mbps)", "Peak BW (Mbps)",
+                   "95th Pctile (Mbps)", "Downtime (min)"]
+    set_header_row(ws1, 6, tbl_headers)
+
+    for ri, d in enumerate(dept_rows, 7):
+        row_vals = [d["name"], d["circuit_id"], d["capacity"], d["sla"],
+                    d["achieved"], d["status"], d["avg_bw"], d["peak_bw"],
+                    d["p95_bw"], d["down_min"]]
+        for ci, val in enumerate(row_vals, 1):
+            cell = ws1.cell(row=ri, column=ci, value=val)
+            cell.border = border
+            cell.alignment = left if ci == 1 else center
+            if ci == 6:
+                cell.fill = ok_fill if val == "COMPLIANT" else fail_fill
+                cell.font = ok_font if val == "COMPLIANT" else fail_font
+
+    for i, w in enumerate([30, 16, 16, 14, 14, 14, 16, 16, 18, 15], 1):
+        ws1.column_dimensions[get_column_letter(i)].width = w
+    ws1.freeze_panes = "A7"
+
+    # ── Sheet 2: Daily Bandwidth ─────────────────────────────────────────
+    ws2 = wb.create_sheet("Daily Bandwidth")
+    day_headers = ["Day"] + [d["name"] for d in dept_rows]
+    set_header_row(ws2, 1, day_headers)
+    for day in range(num_days):
+        for ci, val in enumerate([day + 1] + [d["bw_series"][day] for d in dept_rows], 1):
+            cell = ws2.cell(row=day + 2, column=ci, value=val)
+            cell.border = border
+            cell.alignment = center
+    ws2.column_dimensions["A"].width = 8
+    for i in range(2, len(dept_rows) + 2):
+        ws2.column_dimensions[get_column_letter(i)].width = 22
+    ws2.freeze_panes = "B2"
+
+    # ── Sheet 3: Outages ─────────────────────────────────────────────────
+    ws3 = wb.create_sheet("Outages")
+    set_header_row(ws3, 1, ["Department", "Timestamp", "Duration (min)", "Cause", "Resolved"])
+    ri = 2
+    for d in dept_rows:
+        for o in d["outages"]:
+            for ci, val in enumerate([d["name"], o["ts"], o["dur"], o["cause"], o["res"]], 1):
+                cell = ws3.cell(row=ri, column=ci, value=val)
+                cell.border = border
+                cell.alignment = left if ci in (1, 4) else center
+            ri += 1
+    for i, w in enumerate([30, 22, 16, 28, 10], 1):
+        ws3.column_dimensions[get_column_letter(i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  GENERATE REPORT
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown('<p class="section-title">Report Generation</p>', unsafe_allow_html=True)
@@ -232,35 +350,94 @@ else:
         ]
 
         try:
-            with st.spinner("Compiling PDF..."):
-                pdf_bytes = rpt.build_report(
-                    output=None,
-                    departments=departments,
-                    report_period=report_period,
-                    report_month_start=report_month_start,
-                    random_seed=int(random_seed),
-                    logo1_path=None,
-                    logo2_path=None,
-                )
+            if report_format == "PDF":
+                with st.spinner("Compiling PDF..."):
+                    file_bytes = rpt.build_report(
+                        output=None,
+                        departments=departments,
+                        report_period=report_period,
+                        report_month_start=report_month_start,
+                        random_seed=int(random_seed),
+                        logo1_path=None,
+                        logo2_path=None,
+                    )
+                file_mime = "application/pdf"
+            else:
+                with st.spinner("Building Excel workbook..."):
+                    file_bytes = build_excel_report(
+                        departments=departments,
+                        report_period=report_period,
+                        report_month_start=report_month_start,
+                        random_seed=int(random_seed),
+                    )
+                file_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-            st.session_state["pdf_bytes"] = pdf_bytes
-            st.session_state["pdf_fname"] = output_fname
-            
+            st.session_state["report_bytes"] = file_bytes
+            st.session_state["report_fname"] = output_fname
+            st.session_state["report_mime"]  = file_mime
+
+            # Append to history
+            if "report_history" not in st.session_state:
+                st.session_state["report_history"] = []
+            st.session_state["report_history"].insert(0, {
+                "fname":        output_fname,
+                "period":       report_period,
+                "format":       report_format,
+                "generated_at": datetime.now().strftime("%d %b %Y, %H:%M"),
+                "size_kb":      round(len(file_bytes) / 1024, 1),
+                "bytes":        file_bytes,
+                "mime":         file_mime,
+            })
+
         except Exception as e:
             st.error(f"Error generating report: {e}")
 
     # Persisted Download Button
-    if "pdf_bytes" in st.session_state:
+    if "report_bytes" in st.session_state:
         dl_col, _ = st.columns([2, 6])
         with dl_col:
             st.download_button(
-                label="Download PDF",
-                data=st.session_state["pdf_bytes"],
-                file_name=st.session_state["pdf_fname"],
-                mime="application/pdf",
+                label=f"Download {st.session_state['report_fname'].split('.')[-1].upper()}",
+                data=st.session_state["report_bytes"],
+                file_name=st.session_state["report_fname"],
+                mime=st.session_state["report_mime"],
                 use_container_width=True,
             )
-        st.caption(f"File: {st.session_state['pdf_fname']} ({len(st.session_state['pdf_bytes']) / 1024:.0f} KB)")
+        st.caption(f"File: {st.session_state['report_fname']} ({len(st.session_state['report_bytes']) / 1024:.0f} KB)")
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  REPORT HISTORY
+# ═══════════════════════════════════════════════════════════════════════════
+st.markdown('<p class="section-title">Report History</p>', unsafe_allow_html=True)
+
+if "report_history" not in st.session_state or not st.session_state["report_history"]:
+    st.caption("No reports generated this session.")
+else:
+    history = st.session_state["report_history"]
+    hist_hdr = "<div style='display:grid;grid-template-columns:3fr 1.5fr 1.2fr 1.5fr 1.2fr;gap:0.5rem;" \
+               "font-size:0.8rem;font-weight:600;color:#5f5e5b;border-bottom:1px solid #c8c6c3;padding-bottom:0.4rem;margin-bottom:0.4rem;'>" \
+               "<span>Filename</span><span>Period</span><span>Format</span><span>Generated</span><span></span></div>"
+    st.markdown(hist_hdr, unsafe_allow_html=True)
+    for i, entry in enumerate(history):
+        c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.2, 1.5, 1.2])
+        c1.write(f"`{entry['fname']}`")
+        c2.write(entry["period"])
+        c3.write(f"{entry['format']} · {entry['size_kb']:.0f} KB")
+        c4.write(entry["generated_at"])
+        with c5:
+            st.download_button(
+                label="↓ Download",
+                data=entry["bytes"],
+                file_name=entry["fname"],
+                mime=entry["mime"],
+                key=f"hist_dl_{i}",
+                use_container_width=True,
+            )
+    st.write("")
+    if st.button("Clear History", key="clear_history"):
+        st.session_state["report_history"] = []
+        st.rerun()
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  FOOTER
