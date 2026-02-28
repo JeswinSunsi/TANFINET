@@ -1,18 +1,3 @@
-/*
- * Carrier-Grade SLA Monitoring Agent (Single File)
- *
- * Features:
- *  - Non-blocking epoll loop
- *  - ICMP RTT with SO_TIMESTAMPNS
- *  - RFC 3393 jitter
- *  - Token bucket UDP generator
- *  - TWAMP-Light basic test
- *  - SNMPv3 AuthPriv polling
- *  - TLS reporting with certificate validation
- *  - One-way delay
- *  - Asymmetry detection
- */
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,11 +20,9 @@
 #define MAX_EVENTS 10
 #define ICMP_COUNT 20
 #define UDP_PACKET 1400
-#define TOKEN_RATE 5000000.0      // 5 Mbps
+#define TOKEN_RATE 5000000.0
 #define BUCKET_SIZE 1000000.0
 #define TWAMP_PORT 862
-
-/* ---------------- Utility ---------------- */
 
 int set_nonblocking(int fd) {
     return fcntl(fd, F_SETFL,
@@ -57,8 +40,6 @@ unsigned short checksum(void *b, int len) {
     sum += (sum >> 16);
     return ~sum;
 }
-
-/* ---------------- Token Bucket ---------------- */
 
 typedef struct {
     double tokens;
@@ -99,8 +80,6 @@ int tb_consume(token_bucket *tb, double size) {
     return 0;
 }
 
-/* ---------------- RFC3393 Jitter ---------------- */
-
 double rfc3393_jitter(double *delays, int count) {
     if (count < 2) return 0;
     double sum = 0;
@@ -108,8 +87,6 @@ double rfc3393_jitter(double *delays, int count) {
         sum += fabs(delays[i] - delays[i-1]);
     return sum / (count - 1);
 }
-
-/* ---------------- ICMP ---------------- */
 
 double icmp_delays[ICMP_COUNT];
 int icmp_received = 0;
@@ -125,8 +102,6 @@ double timespec_diff_ms(struct timespec *a,
     return (b->tv_sec - a->tv_sec) * 1000.0 +
            (b->tv_nsec - a->tv_nsec) / 1e6;
 }
-
-/* ---------------- SNMPv3 ---------------- */
 
 void snmpv3_poll(char *host) {
 
@@ -160,7 +135,6 @@ void snmpv3_poll(char *host) {
     ss = snmp_open(&session);
     if (!ss) return;
 
-    /* Example OID: ifInErrors.1 */
     oid anOID[MAX_OID_LEN];
     size_t anOID_len = MAX_OID_LEN;
     read_objid(".1.3.6.1.2.1.2.2.1.14.1", anOID, &anOID_len);
@@ -190,7 +164,6 @@ void snmpv3_poll(char *host) {
     snmp_close(ss);
 }
 
-/* ---------------- TLS Reporting ---------------- */
 
 SSL_CTX* init_tls() {
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
@@ -254,7 +227,6 @@ void tls_report(char *backend, int port,
     SSL_CTX_free(ctx);
 }
 
-/* ---------------- TWAMP Light ---------------- */
 
 double twamp_test(char *server) {
 
@@ -289,8 +261,6 @@ double twamp_test(char *server) {
     return timespec_diff_ms(&send_ts,
                             &recv_ts);
 }
-
-/* ---------------- MAIN ---------------- */
 
 int main(int argc, char *argv[]) {
 
@@ -349,7 +319,6 @@ int main(int argc, char *argv[]) {
                 sizeof(dest));
         }
 
-        /* TWAMP */
         double rtt =
             twamp_test(target);
 
@@ -361,10 +330,8 @@ int main(int argc, char *argv[]) {
                 icmp_delays,
                 ICMP_COUNT);
 
-        /* One-way delay (approx) */
         double one_way = rtt / 2.0;
 
-        /* Asymmetry detection */
         double reverse = rtt - one_way;
         double asymmetry =
             fabs(one_way - reverse);
