@@ -112,7 +112,7 @@ st.markdown(f"""
 
   <div style="display: flex; flex-direction: column; justify-content: center;">
     <p class="app-title" style="margin: 0; font-size: 1.75rem; font-weight: 600;">TANFINET ILL-SLA Compliance Monitor</p>
-    <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation — Performance Audit Generator</p>
+    <p class="app-subtitle" style="margin: 0;">Tamil Nadu FibreNet Corporation: Performance Audit Generator</p>
   </div>
     <img src="data:image/png;base64,{logo_base64}" 
        style="width: 110px; height: auto; display: block;">
