@@ -341,7 +341,8 @@ if n_sel == 0:
 else:
     generate_col, _ = st.columns([2, 6])
     with generate_col:
-        generate_btn = st.button("Generate PDF Report", type="primary", use_container_width=True)
+        _gen_label = "Generate Excel Report" if report_format == "Excel" else "Generate PDF Report"
+        generate_btn = st.button(_gen_label, type="primary", use_container_width=True)
 
     if generate_btn:
         departments = [
@@ -396,8 +397,10 @@ else:
     if "report_bytes" in st.session_state:
         dl_col, _ = st.columns([2, 6])
         with dl_col:
+            _dl_ext = st.session_state['report_fname'].split('.')[-1].upper()
+            _dl_label = "Download Excel Report" if _dl_ext == "XLSX" else "Download PDF Report"
             st.download_button(
-                label=f"Download {st.session_state['report_fname'].split('.')[-1].upper()}",
+                label=_dl_label,
                 data=st.session_state["report_bytes"],
                 file_name=st.session_state["report_fname"],
                 mime=st.session_state["report_mime"],
