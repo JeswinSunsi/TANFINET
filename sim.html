@@ -158,7 +158,7 @@
         }
         .metric-card { 
             background: var(--metric-bg); 
-            padding: 6px 4px; 
+            padding: 6px 4px 4px; 
             border-radius: var(--radius-inner); 
             text-align: center; 
             display: flex;
@@ -167,6 +167,7 @@
         }
         .metric-title { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
         .metric-value { font-size: 0.95rem; font-weight: bold; margin-top: 2px; }
+        .sparkline { width: 100%; height: 22px; display: block; margin-top: 4px; border-radius: 2px; overflow: hidden; }
         .text-green { color: #4ade80; } .text-red { color: #f87171; } .text-blue { color: #60a5fa; } .text-yellow { color: #facc15; } .text-purple { color: #c084fc; } .text-white { color: var(--text-main); }
         
         .node-label {
@@ -276,12 +277,12 @@
             <button id="btn-add-dept" class="secondary">+ Add ILL</button>
             
             <div class="metrics">
-                <div class="metric-card"><div class="metric-title">Sent</div><div id="m-sent" class="metric-value text-blue">0</div></div>
-                <div class="metric-card"><div class="metric-title">Success</div><div id="m-success" class="metric-value text-green">0</div></div>
-                <div class="metric-card"><div class="metric-title">Lost</div><div id="m-lost" class="metric-value text-red">0</div></div>
-                <div class="metric-card"><div class="metric-title">Avg RTT</div><div id="m-rtt" class="metric-value text-yellow">0ms</div></div>
-                <div class="metric-card"><div class="metric-title">Avg Jitter</div><div id="m-jitter" class="metric-value text-purple">0ms</div></div>
-                <div class="metric-card"><div class="metric-title">Data (KB)</div><div id="m-data" class="metric-value text-white">0.0</div></div>
+                <div class="metric-card"><div class="metric-title">Sent/s</div><div id="m-sent" class="metric-value text-blue">0</div><canvas id="spark-sent" class="sparkline"></canvas></div>
+                <div class="metric-card"><div class="metric-title">Success</div><div id="m-success" class="metric-value text-green">0</div><canvas id="spark-success" class="sparkline"></canvas></div>
+                <div class="metric-card"><div class="metric-title">Lost</div><div id="m-lost" class="metric-value text-red">0</div><canvas id="spark-lost" class="sparkline"></canvas></div>
+                <div class="metric-card"><div class="metric-title">Avg RTT</div><div id="m-rtt" class="metric-value text-yellow">0ms</div><canvas id="spark-rtt" class="sparkline"></canvas></div>
+                <div class="metric-card"><div class="metric-title">Avg Jitter</div><div id="m-jitter" class="metric-value text-purple">0ms</div><canvas id="spark-jitter" class="sparkline"></canvas></div>
+                <div class="metric-card"><div class="metric-title">Data (KB)</div><div id="m-data" class="metric-value text-white">0.0</div><canvas id="spark-data" class="sparkline"></canvas></div>
             </div>
         </div>
     </div>
@@ -571,6 +572,106 @@ const wanGeo = new THREE.BufferGeometry().setFromPoints(wanPoints);        const
             downtimeActive = e.target.checked;
             downtimeBanner.style.display = downtimeActive ? 'block' : 'none';
         });
+
+        // --- Sparkline Engine ---
+        const SPARK_MAX = 24;
+        const sparkData = { sent: [], success: [], lost: [], rtt: [], jitter: [], data: [] };
+        let _prevSent = 0, _prevSuccess = 0, _prevLost = 0;
+
+        function pushSpark(key, value) {
+            sparkData[key].push(value);
+            if (sparkData[key].length > SPARK_MAX) sparkData[key].shift();
+        }
+
+        function drawSparkline(id, data, strokeColor, fillColor) {
+            const canvas = document.getElementById(id);
+            if (!canvas) return;
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            if (w === 0 || h === 0) return;
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+            if (data.length < 2) return;
+
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            const stepX = w / (SPARK_MAX - 1);
+
+            const points = data.map((v, i) => ({
+                x: i * stepX,
+                y: h - ((v - min) / range) * (h - 3) - 1
+            }));
+
+            // Gradient fill
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, fillColor);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                const mx = (points[i-1].x + points[i].x) / 2;
+                const my = (points[i-1].y + points[i].y) / 2;
+                ctx.quadraticCurveTo(points[i-1].x, points[i-1].y, mx, my);
+            }
+            ctx.lineTo(points[points.length-1].x, points[points.length-1].y);
+            ctx.lineTo(points[points.length-1].x, h);
+            ctx.lineTo(points[0].x, h);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Stroke line (smooth)
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                const mx = (points[i-1].x + points[i].x) / 2;
+                const my = (points[i-1].y + points[i].y) / 2;
+                ctx.quadraticCurveTo(points[i-1].x, points[i-1].y, mx, my);
+            }
+            ctx.lineTo(points[points.length-1].x, points[points.length-1].y);
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = 1.5;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // Dot on latest point
+            const lp = points[points.length - 1];
+            ctx.beginPath();
+            ctx.arc(lp.x, lp.y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = strokeColor;
+            ctx.fill();
+        }
+
+        function redrawAllSparklines() {
+            drawSparkline('spark-sent',    sparkData.sent,    '#60a5fa', 'rgba(96,165,250,0.3)');
+            drawSparkline('spark-success', sparkData.success, '#4ade80', 'rgba(74,222,128,0.3)');
+            drawSparkline('spark-lost',    sparkData.lost,    '#f87171', 'rgba(248,113,113,0.3)');
+            drawSparkline('spark-rtt',     sparkData.rtt,     '#facc15', 'rgba(250,204,21,0.25)');
+            drawSparkline('spark-jitter',  sparkData.jitter,  '#c084fc', 'rgba(192,132,252,0.25)');
+            drawSparkline('spark-data',    sparkData.data,    '#e2e8f0', 'rgba(226,232,240,0.2)');
+        }
+
+        // 1-second ticker: captures per-second rates + snapshots
+        setInterval(() => {
+            const sentRate    = metrics.sent    - _prevSent;
+            const successRate = metrics.success - _prevSuccess;
+            const lostRate    = metrics.lost    - _prevLost;
+            _prevSent    = metrics.sent;
+            _prevSuccess = metrics.success;
+            _prevLost    = metrics.lost;
+
+            pushSpark('sent',    sentRate);
+            pushSpark('success', successRate);
+            pushSpark('lost',    lostRate);
+            pushSpark('rtt',     metrics.success > 0 ? Math.round(metrics.totalRTT / metrics.success) : 0);
+            pushSpark('jitter',  metrics.success > 1 ? Math.round(metrics.totalJitter / metrics.success) : 0);
+            pushSpark('data',    parseFloat((metrics.totalBytes / 1024).toFixed(1)));
+
+            redrawAllSparklines();
+        }, 1000);
 
         function updateMetrics() {
             ui.sent.innerText = metrics.sent; 
