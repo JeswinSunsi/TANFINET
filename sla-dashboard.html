@@ -1017,7 +1017,7 @@ function evaluate(data) {
     // Downtime notice
     document.getElementById('downtime-notice').style.display = data.downtimeActive ? 'block' : 'none';
     if (data.downtimeActive && prevState._downtime !== true) {
-        addViolation('NETWORK DOWNTIME ACTIVE', 'All packets being dropped. SLA window impacted.', 'breach');
+        addViolation('NETWORK DOWNTIME', 'All packets being dropped. SLA window impacted.', 'breach');
     }
     prevState._downtime = data.downtimeActive;
 
