@@ -639,6 +639,14 @@
             Alert Recipients
         </div>
         <div class="email-toggle-row">
+            <span style="font-size:0.8rem;font-weight:500;color:var(--text-main);">Alert sound</span>
+            <label class="toggle-switch" title="Enable or disable the ping alert sound on SLA violations">
+                <input type="checkbox" id="alert-sound-enabled" checked>
+                <span class="toggle-track"></span>
+                <span class="toggle-switch-text" id="alert-sound-label">ON</span>
+            </label>
+        </div>
+        <div class="email-toggle-row">
             <span style="font-size:0.8rem;font-weight:500;color:var(--text-main);">Send email alerts</span>
             <label class="toggle-switch" title="Enable or disable violation alert emails">
                 <input type="checkbox" id="email-enabled">
@@ -863,6 +871,15 @@ emailEnabledEl.addEventListener('change', () => {
 // Single shared AudioContext – created lazily on first user interaction so
 // it is already in the "running" state when alerts fire (browsers block audio
 // that starts in a fresh, never-resumed context served over HTTP/HTTPS).
+let alertSoundEnabled = true;
+
+const alertSoundToggle = document.getElementById('alert-sound-enabled');
+const alertSoundLabel  = document.getElementById('alert-sound-label');
+alertSoundToggle.addEventListener('change', () => {
+    alertSoundEnabled = alertSoundToggle.checked;
+    alertSoundLabel.textContent = alertSoundEnabled ? 'ON' : 'OFF';
+});
+
 let _audioCtx = null;
 function _getAudioCtx() {
     if (!_audioCtx) {
@@ -878,6 +895,7 @@ document.addEventListener('click', function _unlock() {
 }, { once: true });
 
 function playAlertSound() {
+    if (!alertSoundEnabled) return;
     try {
         const ctx      = _getAudioCtx();
         const sequence = [880, 660, 880];
