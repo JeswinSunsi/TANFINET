@@ -860,31 +860,50 @@ emailEnabledEl.addEventListener('change', () => {
 });
 
 // ─── Alert Sound ─────────────────────────────────────────────────────────
+// Single shared AudioContext – created lazily on first user interaction so
+// it is already in the "running" state when alerts fire (browsers block audio
+// that starts in a fresh, never-resumed context served over HTTP/HTTPS).
+let _audioCtx = null;
+function _getAudioCtx() {
+    if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return _audioCtx;
+}
+// Unlock the context on the very first user gesture so subsequent
+// programmatic calls (alerts) will always be allowed to produce sound.
+document.addEventListener('click', function _unlock() {
+    document.removeEventListener('click', _unlock);
+    try { _getAudioCtx().resume(); } catch (_) {}
+}, { once: true });
+
 function playAlertSound() {
     try {
-        const ctx      = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx      = _getAudioCtx();
         const sequence = [880, 660, 880];
         const noteDur  = 0.18;
         const noteGap  = 0.22;
-        const cycleDur = sequence.length * noteGap;  // ~0.66 s per cycle
         const totalDur = 4;                           // seconds to keep playing
-        let t = ctx.currentTime;
 
-        while (t < ctx.currentTime + totalDur) {
-            sequence.forEach(freq => {
-                const osc  = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(freq, t);
-                gain.gain.setValueAtTime(0.18, t);
-                gain.gain.exponentialRampToValueAtTime(0.001, t + noteDur);
-                osc.start(t);
-                osc.stop(t + noteDur);
-                t += noteGap;
-            });
-        }
+        // Resume first (handles suspended state on autoplay-restricted origins).
+        ctx.resume().then(() => {
+            let t = ctx.currentTime;
+            while (t < ctx.currentTime + totalDur) {
+                sequence.forEach(freq => {
+                    const osc  = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(freq, t);
+                    gain.gain.setValueAtTime(0.18, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + noteDur);
+                    osc.start(t);
+                    osc.stop(t + noteDur);
+                    t += noteGap;
+                });
+            }
+        });
     } catch (e) { /* AudioContext not available */ }
 }
 
